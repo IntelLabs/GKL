@@ -17,7 +17,7 @@
 
 echo "Checking dependencies"
 install_dep
-
+echo "Change"
 echo "Setting GCC"
 source scl_source enable devtoolset-7
 gcc --version
