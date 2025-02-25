@@ -48,7 +48,7 @@ public:
 
 private:
     // Private constructor to prevent instantiation
-    ComputeConfig() : openMP(false), avxLevel(AVXLevel::SCALAR), numThreads(1) {}
+    ComputeConfig() : openMP(false), avxLevel(AVXLevel::SCALAR), numThreads(1), maxMemoryInMB(512) {}
 
     // Private destructor
     ~ComputeConfig() {}

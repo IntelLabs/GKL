@@ -70,7 +70,7 @@ public:
 
         // Compute Batch information
 
-        int64_t maxMemory = maxMemoryInMB * 1024 * 1024; // Convert to bytes
+        int64_t maxMemory = static_cast<int64_t>(maxMemoryInMB) * 1024 * 1024; // Convert to bytes
         int64_t memoryPerPair = (maxReadLength * 5 + maxHaplotypeLength * 2) * sizeof(int8_t) + sizeof(double) + 2 * sizeof(int64_t);
         batchSize = std::min(totalPairs, static_cast<int>(maxMemory / memoryPerPair));
         totalBatch = static_cast<int>(std::ceil(static_cast<double>(totalPairs) / batchSize));
@@ -114,6 +114,10 @@ public:
         nativeHapPDBases.clear();
         nativeHapLengths.clear();
     }
+
+    // Delete copy constructor and assignment operator to prevent copying
+    JavaData(const JavaData &) = delete;
+    JavaData &operator=(const JavaData &) = delete;
 
     // Print data
     void printData() const

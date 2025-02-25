@@ -426,26 +426,24 @@ public class IntelPDHMMUnitTest {
 
     @Test(enabled = true)
     public void sampleUse() {
-        for (int x = 0; x < 1000000; x++) {
-            int batchsize = 1;
-            // Define example data
-            ReadDataHolder[] readDataArray = new ReadDataHolder[batchsize];
-            HaplotypeDataHolder[] haplotypeDataArray = new HaplotypeDataHolder[batchsize];
-            double[] likelihoodArray = new double[batchsize * batchsize];
 
-            for (int i = 0; i < batchsize; i++) {
-                readDataArray[i] = getRandomReadData();
-                haplotypeDataArray[i] = getRandomHaplotypeData();
-            }
+        int batchsize = 1;
+        // Define example data
+        ReadDataHolder[] readDataArray = new ReadDataHolder[batchsize];
+        HaplotypeDataHolder[] haplotypeDataArray = new HaplotypeDataHolder[batchsize];
+        double[] likelihoodArray = new double[batchsize * batchsize];
 
-            // Call the computeLikelihoods method
-            try {
-                intelPDHMM.computeLikelihoods(readDataArray, haplotypeDataArray, likelihoodArray);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        for (int i = 0; i < batchsize; i++) {
+            readDataArray[i] = getRandomReadData();
+            haplotypeDataArray[i] = getRandomHaplotypeData();
         }
 
+        // Call the computeLikelihoods method
+        try {
+            intelPDHMM.computeLikelihoods(readDataArray, haplotypeDataArray, likelihoodArray);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Test(enabled = true)
@@ -537,9 +535,7 @@ public class IntelPDHMMUnitTest {
 
             long start = System.nanoTime();
 
-            for (int i = 0; i < 2000000; i++) {
-                intelPDHMM.computeLikelihoods(readDataArray, haplotypeDataArray, actualResults);
-            }
+            intelPDHMM.computeLikelihoods(readDataArray, haplotypeDataArray, actualResults);
 
             long end = System.nanoTime();
 
