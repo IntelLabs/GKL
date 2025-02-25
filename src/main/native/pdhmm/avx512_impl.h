@@ -26,6 +26,9 @@
 
 #include "pdhmm-common.h"
 
-extern int32_t (*computePDHMM_fp_avx512)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength);
+extern int32_t (*computePDHMM_fp_avx512)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength, const int32_t threads);
 
+extern int32_t avx512_impl(PDHMMInputData input, int numThreads);
+
+extern int32_t simd_width_avx512;
 #endif // AVX512_IMPL_H

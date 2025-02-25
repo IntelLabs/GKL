@@ -25,4 +25,11 @@
 
 #include "avx2-pdhmm.h"
 
-int32_t (*computePDHMM_fp_avx2)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength) = &computePDHMM_avx2;
+int32_t (*computePDHMM_fp_avx2)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength, const int32_t threads) = &computePDHMM_avx2;
+
+int32_t avx2_impl(PDHMMInputData input, int numThreads)
+{
+    return computePDHMM_avx2(input.getHapBases(), input.getHapPDBases(), input.getReadBases(), input.getReadQual(), input.getReadInsQual(), input.getReadDelQual(), input.getGCP(), input.getResult(), input.getT(), input.getHapLengths(), input.getReadLengths(), input.getMaxReadLength(), input.getMaxHaplotypeLength(), numThreads);
+}
+
+int32_t simd_width_avx2 = SIMD_WIDTH_DOUBLE;

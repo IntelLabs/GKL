@@ -23,8 +23,10 @@
  */
 #include "pdhmm-serial.h"
 #include "MathUtils.h"
-#include "pdhmm-common.h"
 #include <cstdio>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 double qualToErrorProb(int8_t qual, const double *qualToErrorProbCache)
 {
@@ -88,6 +90,33 @@ inline int32_t allocate(double *&matchMatrixVec, double *&insertionMatrixVec, do
     return PDHMM_SUCCESS;
 }
 
+inline void initialize(double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, double *transitionVec, double *priorVec, bool &constantsAreInitialized, bool &initialized, const int32_t maxReadLength, const int32_t maxHaplotypeLength)
+{
+    const int32_t paddedMaxReadLength = maxReadLength + 1;
+    const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
+
+    for (int32_t i = 0; i < paddedMaxHaplotypeLength; i++)
+    {
+        matchMatrixVec[i] = 0;
+        insertionMatrixVec[i] = 0;
+        deletionMatrixVec[i] = 0;
+        branchMatchMatrixVec[i] = 0;
+        branchInsertionMatrixVec[i] = 0;
+        branchDeletionMatrixVec[i] = 0;
+    }
+
+    for (int32_t i = 0; i < TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength; i++)
+        transitionVec[i] = 0;
+
+    for (int32_t i = 0; i < paddedMaxHaplotypeLength * paddedMaxReadLength; i++)
+        priorVec[i] = 0;
+
+    constantsAreInitialized = false;
+    initialized = true;
+
+    return;
+}
+
 inline void initialize(double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, bool &constantsAreInitialized, bool &initialized, const int32_t maxHaplotypeLength)
 {
     const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
@@ -116,6 +145,13 @@ inline void freeTables(double *matchMatrixVec, double *insertionMatrixVec, doubl
     _mm_free(branchDeletionMatrixVec);
     _mm_free(transitionVec);
     _mm_free(priorVec);
+}
+
+inline void freeVec(bool *&constantsAreInitialized, bool *&initialized, int32_t *&prev_hap_bases_lengths)
+{
+    _mm_free(constantsAreInitialized);
+    _mm_free(initialized);
+    _mm_free(prev_hap_bases_lengths);
 }
 
 double matchToMatchProbFun(int32_t insQual, int32_t delQual, const double *matchToMatchProb, int32_t &status)
@@ -418,58 +454,304 @@ double computeReadLikelihoodGivenHaplotypeLog10(const int8_t *hap_bases, const i
     return result;
 }
 
-int32_t computePDHMM_serial(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength)
+int32_t computePDHMM_serial(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength, const int32_t totalThreads)
 {
-    int32_t status = PDHMM_SUCCESS;
-    double *matchToMatchLog10, *matchToMatchProb, *qualToErrorProbCache, *qualToProbLog10Cache;
-    status = init(matchToMatchLog10, matchToMatchProb, qualToErrorProbCache, qualToProbLog10Cache);
-    if (status != PDHMM_SUCCESS)
-        return status;
+    int32_t init_status = PDHMM_SUCCESS;
+    ProbabilityCache &probCache = ProbabilityCache::getInstance();
+    init_status = probCache.initialize();
+    double *matchToMatchLog10 = probCache.getMatchToMatchLog10();
+    double *matchToMatchProb = probCache.getMatchToMatchProb();
+    double *qualToErrorProbCache = probCache.getQualToErrorProbCache();
+    double *qualToProbLog10Cache = probCache.getQualToProbLog10Cache();
+    if (init_status != PDHMM_SUCCESS)
+        return init_status;
 
-    double *matchMatrix, *insertionMatrix, *deletionMatrix, *branchMatchMatrix, *branchInsertionMatrix, *branchDeletionMatrix, *transition, *prior;
-    bool constantsAreInitialized = false, initialized = true;
-    int32_t prev_hap_bases_length = -1;
+    // Allocate memory for tables
+    DPTable &dpTable = DPTable::getInstance();
+    double *g_matchMatrixVec = dpTable.getMatchMatrix();
+    double *g_insertionMatrixVec = dpTable.getInsertionMatrix();
+    double *g_deletionMatrixVec = dpTable.getDeletionMatrix();
+    double *g_branchMatchMatrixVec = dpTable.getBranchMatchMatrix();
+    double *g_branchInsertionMatrixVec = dpTable.getBranchInsertionMatrix();
+    double *g_branchDeletionMatrixVec = dpTable.getBranchDeletionMatrix();
+    double *g_transitionVec = dpTable.getTransition();
+    double *g_priorVec = dpTable.getPrior();
 
-    allocate(matchMatrix, insertionMatrix, deletionMatrix, branchMatchMatrix, branchInsertionMatrix, branchDeletionMatrix, transition, prior, constantsAreInitialized, initialized, maxReadLength, maxHaplotypeLength);
+    bool *g_constantsAreInitialized, *g_initialized;
+    int32_t *g_prev_hap_bases_lengths;
+    int32_t *status;
 
-    for (int32_t i = 0; i < testcase; i++)
+    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+
+    if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
     {
-        initialize(matchMatrix, insertionMatrix, deletionMatrix, branchMatchMatrix, branchInsertionMatrix, branchDeletionMatrix, constantsAreInitialized, initialized, maxHaplotypeLength);
-        prev_hap_bases_length = -1;
-        int32_t hapIndexOffset = i * maxHaplotypeLength;
-        int32_t readIndexOffset = i * maxReadLength;
-        int32_t currStatus = PDHMM_SUCCESS;
+        freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+        _mm_free(status);
 
-        result[i] = computeReadLikelihoodGivenHaplotypeLog10(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_lengths[i], read_lengths[i], prev_hap_bases_length, matchMatrix, insertionMatrix, deletionMatrix, branchMatchMatrix, branchInsertionMatrix, branchDeletionMatrix, constantsAreInitialized, transition, prior, matchToMatchProb, qualToErrorProbCache, currStatus, maxHaplotypeLength);
-
-        if (currStatus != PDHMM_SUCCESS)
-            status = currStatus;
+        return PDHMM_MEMORY_ALLOCATION_FAILED;
     }
-    freeTables(matchMatrix, insertionMatrix, deletionMatrix, branchMatchMatrix, branchInsertionMatrix, branchDeletionMatrix, transition, prior);
-    freeInit(matchToMatchLog10, matchToMatchProb, qualToErrorProbCache, qualToProbLog10Cache);
-    return status;
+    const int32_t paddedMaxReadLength = maxReadLength + 1;
+    const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
+    int32_t sizeOfIntermTables = paddedMaxHaplotypeLength;
+#ifdef _OPENMP
+#pragma omp parallel num_threads(totalThreads)
+#endif
+    {
+        int32_t tid = 0;
+#ifdef _OPENMP
+        tid = omp_get_thread_num();
+#endif
+        double *matchMatrixVec, *insertionMatrixVec, *deletionMatrixVec, *branchMatchMatrixVec, *branchInsertionMatrixVec, *branchDeletionMatrixVec, *transitionVec, *priorVec;
+
+        matchMatrixVec = g_matchMatrixVec + (sizeOfIntermTables * tid);
+        insertionMatrixVec = g_insertionMatrixVec + (sizeOfIntermTables * tid);
+        deletionMatrixVec = g_deletionMatrixVec + (sizeOfIntermTables * tid);
+        branchMatchMatrixVec = g_branchMatchMatrixVec + (sizeOfIntermTables * tid);
+        branchInsertionMatrixVec = g_branchInsertionMatrixVec + (sizeOfIntermTables * tid);
+        branchDeletionMatrixVec = g_branchDeletionMatrixVec + (sizeOfIntermTables * tid);
+
+        transitionVec = g_transitionVec + (TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * tid);
+        priorVec = g_priorVec + (paddedMaxHaplotypeLength * paddedMaxReadLength * tid);
+
+        bool *constantsAreInitialized, *initialized;
+        constantsAreInitialized = g_constantsAreInitialized + tid;
+        initialized = g_initialized + tid;
+
+        int32_t *prev_hap_bases_length = g_prev_hap_bases_lengths + (tid);
+        status[tid] = PDHMM_SUCCESS;
+
+#ifdef _OPENMP
+#pragma omp for
+#endif
+        for (int32_t i = 0; i < testcase; i++)
+        {
+            initialize(matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, *constantsAreInitialized, *initialized, maxReadLength, maxHaplotypeLength);
+            *prev_hap_bases_length = -1;
+            int32_t hapIndexOffset = i * maxHaplotypeLength;
+            int32_t readIndexOffset = i * maxReadLength;
+            int32_t currStatus = PDHMM_SUCCESS;
+
+            /* double computeReadLikelihoodGivenHaplotypeLog10(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, int64_t hap_bases_length, int64_t read_bases_length, int32_t &prev_hap_bases_length, double *matchMatrix, double *insertionMatrix, double *deletionMatrix, double *branchMatchMatrix, double *branchInsertionMatrix, double *branchDeletionMatrix, bool &constantsAreInitialized, double *transition, double *prior, const double *matchToMatchProb, const double *qualToErrorProbCache, int32_t &status, int32_t maxHaplotypeLength) */
+            result[i] = computeReadLikelihoodGivenHaplotypeLog10(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_lengths[i], read_lengths[i], *prev_hap_bases_length, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, *constantsAreInitialized, transitionVec, priorVec, matchToMatchProb, qualToErrorProbCache, currStatus, maxHaplotypeLength);
+
+            if (currStatus != PDHMM_SUCCESS)
+                status[tid] = currStatus;
+        }
+    }
+    int32_t outputStatus = PDHMM_SUCCESS;
+    for (int32_t i = 0; i < totalThreads; i++)
+    {
+        if (status[i] != PDHMM_SUCCESS)
+        {
+            outputStatus = status[i];
+            break;
+        }
+    }
+    freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+    _mm_free(status);
+
+    return outputStatus;
 }
 
-int32_t computePDHMM_serial(const double *matchToMatchProb, const double *qualToErrorProbCache, double *matchMatrix, double *insertionMatrix, double *deletionMatrix, double *branchMatchMatrix, double *branchInsertionMatrix, double *branchDeletionMatrix, double *transition, double *prior, const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength)
+int32_t computePDHMM_serial(const double *matchToMatchProb, const double *qualToErrorProbCache, double *g_matchMatrixVec, double *g_insertionMatrixVec, double *g_deletionMatrixVec, double *g_branchMatchMatrixVec, double *g_branchInsertionMatrixVec, double *g_branchDeletionMatrixVec, double *g_transitionVec, double *g_priorVec, const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t testcase, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength, const int32_t totalThreads)
 {
-    int32_t status = PDHMM_SUCCESS;
+    bool *g_constantsAreInitialized, *g_initialized;
+    int32_t *g_prev_hap_bases_lengths;
+    int32_t *status;
 
-    bool constantsAreInitialized = false, initialized = true;
+    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
 
-    int32_t prev_hap_bases_length = -1;
-
-    for (int32_t i = 0; i < testcase; i++)
+    if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
     {
-        initialize(matchMatrix, insertionMatrix, deletionMatrix, branchMatchMatrix, branchInsertionMatrix, branchDeletionMatrix, constantsAreInitialized, initialized, maxHaplotypeLength);
-        prev_hap_bases_length = -1;
-        int32_t hapIndexOffset = i * maxHaplotypeLength;
-        int32_t readIndexOffset = i * maxReadLength;
-        int32_t currStatus = PDHMM_SUCCESS;
+        freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+        _mm_free(status);
 
-        result[i] = computeReadLikelihoodGivenHaplotypeLog10(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_lengths[i], read_lengths[i], prev_hap_bases_length, matchMatrix, insertionMatrix, deletionMatrix, branchMatchMatrix, branchInsertionMatrix, branchDeletionMatrix, constantsAreInitialized, transition, prior, matchToMatchProb, qualToErrorProbCache, currStatus, maxHaplotypeLength);
-
-        if (currStatus != PDHMM_SUCCESS)
-            status = currStatus;
+        return PDHMM_MEMORY_ALLOCATION_FAILED;
     }
-    return status;
+
+    const int32_t paddedMaxReadLength = maxReadLength + 1;
+    const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
+    int32_t sizeOfIntermTables = paddedMaxHaplotypeLength;
+#ifdef _OPENMP
+#pragma omp parallel num_threads(totalThreads)
+#endif
+    {
+        int32_t tid = 0;
+#ifdef _OPENMP
+        tid = omp_get_thread_num();
+#endif
+        double *matchMatrixVec, *insertionMatrixVec, *deletionMatrixVec, *branchMatchMatrixVec, *branchInsertionMatrixVec, *branchDeletionMatrixVec, *transitionVec, *priorVec;
+
+        matchMatrixVec = g_matchMatrixVec + (sizeOfIntermTables * tid);
+        insertionMatrixVec = g_insertionMatrixVec + (sizeOfIntermTables * tid);
+        deletionMatrixVec = g_deletionMatrixVec + (sizeOfIntermTables * tid);
+        branchMatchMatrixVec = g_branchMatchMatrixVec + (sizeOfIntermTables * tid);
+        branchInsertionMatrixVec = g_branchInsertionMatrixVec + (sizeOfIntermTables * tid);
+        branchDeletionMatrixVec = g_branchDeletionMatrixVec + (sizeOfIntermTables * tid);
+
+        transitionVec = g_transitionVec + (TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * tid);
+        priorVec = g_priorVec + (paddedMaxHaplotypeLength * paddedMaxReadLength * tid);
+
+        bool *constantsAreInitialized, *initialized;
+        constantsAreInitialized = g_constantsAreInitialized + tid;
+        initialized = g_initialized + tid;
+
+        int32_t *prev_hap_bases_length = g_prev_hap_bases_lengths + (tid);
+        status[tid] = PDHMM_SUCCESS;
+#ifdef _OPENMP
+#pragma omp for
+#endif
+        for (int32_t i = 0; i < testcase; i++)
+        {
+            initialize(matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, *constantsAreInitialized, *initialized, maxReadLength, maxHaplotypeLength);
+            *prev_hap_bases_length = -1;
+            int32_t hapIndexOffset = i * maxHaplotypeLength;
+            int32_t readIndexOffset = i * maxReadLength;
+            int32_t currStatus = PDHMM_SUCCESS;
+
+            result[i] = computeReadLikelihoodGivenHaplotypeLog10(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_lengths[i], read_lengths[i], *prev_hap_bases_length, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, *constantsAreInitialized, transitionVec, priorVec, matchToMatchProb, qualToErrorProbCache, currStatus, maxHaplotypeLength);
+
+            if (currStatus != PDHMM_SUCCESS)
+                status[tid] = currStatus;
+        }
+    }
+    int32_t outputStatus = PDHMM_SUCCESS;
+    for (int32_t i = 0; i < totalThreads; i++)
+    {
+        if (status[i] != PDHMM_SUCCESS)
+        {
+            outputStatus = status[i];
+            break;
+        }
+    }
+    freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+    _mm_free(status);
+
+    return outputStatus;
+}
+
+int32_t scalar_impl(PDHMMInputData input, int totalThreads)
+{
+
+    int32_t init_status = PDHMM_SUCCESS;
+
+    ProbabilityCache &probCache = ProbabilityCache::getInstance();
+    init_status = probCache.initialize();
+    double *matchToMatchLog10 = probCache.getMatchToMatchLog10();
+    double *matchToMatchProb = probCache.getMatchToMatchProb();
+    double *qualToErrorProbCache = probCache.getQualToErrorProbCache();
+    double *qualToProbLog10Cache = probCache.getQualToProbLog10Cache();
+    if (init_status != PDHMM_SUCCESS)
+        return init_status;
+
+    // Extract input data
+    const int8_t *hap_bases = input.getHapBases();
+    const int8_t *hap_pdbases = input.getHapPDBases();
+    const int8_t *read_bases = input.getReadBases();
+    const int8_t *read_qual = input.getReadQual();
+    const int8_t *read_ins_qual = input.getReadInsQual();
+    const int8_t *read_del_qual = input.getReadDelQual();
+    const int8_t *gcp = input.getGCP();
+    double *result = input.getResult();
+    int64_t testcase = input.getT();
+    const int64_t *hap_lengths = input.getHapLengths();
+    const int64_t *read_lengths = input.getReadLengths();
+    int32_t maxReadLength = input.getMaxReadLength();
+    int32_t maxHaplotypeLength = input.getMaxHaplotypeLength();
+
+    // Allocate memory for tables
+    DPTable &dpTable = DPTable::getInstance();
+    double *g_matchMatrixVec = dpTable.getMatchMatrix();
+    double *g_insertionMatrixVec = dpTable.getInsertionMatrix();
+    double *g_deletionMatrixVec = dpTable.getDeletionMatrix();
+    double *g_branchMatchMatrixVec = dpTable.getBranchMatchMatrix();
+    double *g_branchInsertionMatrixVec = dpTable.getBranchInsertionMatrix();
+    double *g_branchDeletionMatrixVec = dpTable.getBranchDeletionMatrix();
+    double *g_transitionVec = dpTable.getTransition();
+    double *g_priorVec = dpTable.getPrior();
+
+    bool *g_constantsAreInitialized, *g_initialized;
+    int32_t *g_prev_hap_bases_lengths;
+    int32_t *status;
+
+    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+
+    if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
+    {
+        freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+        _mm_free(status);
+
+        return PDHMM_MEMORY_ALLOCATION_FAILED;
+    }
+
+    const int32_t paddedMaxReadLength = maxReadLength + 1;
+    const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
+    int32_t sizeOfIntermTables = paddedMaxHaplotypeLength;
+#ifdef _OPENMP
+#pragma omp parallel num_threads(totalThreads)
+#endif
+    {
+        int32_t tid = 0;
+#ifdef _OPENMP
+        tid = omp_get_thread_num();
+#endif
+        double *matchMatrixVec, *insertionMatrixVec, *deletionMatrixVec, *branchMatchMatrixVec, *branchInsertionMatrixVec, *branchDeletionMatrixVec, *transitionVec, *priorVec;
+
+        matchMatrixVec = g_matchMatrixVec + (sizeOfIntermTables * tid);
+        insertionMatrixVec = g_insertionMatrixVec + (sizeOfIntermTables * tid);
+        deletionMatrixVec = g_deletionMatrixVec + (sizeOfIntermTables * tid);
+        branchMatchMatrixVec = g_branchMatchMatrixVec + (sizeOfIntermTables * tid);
+        branchInsertionMatrixVec = g_branchInsertionMatrixVec + (sizeOfIntermTables * tid);
+        branchDeletionMatrixVec = g_branchDeletionMatrixVec + (sizeOfIntermTables * tid);
+
+        transitionVec = g_transitionVec + (TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * tid);
+        priorVec = g_priorVec + (paddedMaxHaplotypeLength * paddedMaxReadLength * tid);
+
+        bool *constantsAreInitialized, *initialized;
+        constantsAreInitialized = g_constantsAreInitialized + tid;
+        initialized = g_initialized + tid;
+
+        int32_t *prev_hap_bases_length = g_prev_hap_bases_lengths + (tid);
+        status[tid] = PDHMM_SUCCESS;
+
+#ifdef _OPENMP
+#pragma omp for
+#endif
+        for (int32_t i = 0; i < testcase; i++)
+        {
+            initialize(matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, *constantsAreInitialized, *initialized, maxReadLength, maxHaplotypeLength);
+            *prev_hap_bases_length = -1;
+            int32_t hapIndexOffset = i * maxHaplotypeLength;
+            int32_t readIndexOffset = i * maxReadLength;
+            int32_t currStatus = PDHMM_SUCCESS;
+
+            result[i] = computeReadLikelihoodGivenHaplotypeLog10(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_lengths[i], read_lengths[i], *prev_hap_bases_length, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, *constantsAreInitialized, transitionVec, priorVec, matchToMatchProb, qualToErrorProbCache, currStatus, maxHaplotypeLength);
+
+            if (currStatus != PDHMM_SUCCESS)
+                status[tid] = currStatus;
+        }
+    }
+
+    int32_t outputStatus = PDHMM_SUCCESS;
+    for (int32_t i = 0; i < totalThreads; i++)
+    {
+        if (status[i] != PDHMM_SUCCESS)
+        {
+            outputStatus = status[i];
+            break;
+        }
+    }
+    freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+    _mm_free(status);
+
+    return outputStatus;
 }

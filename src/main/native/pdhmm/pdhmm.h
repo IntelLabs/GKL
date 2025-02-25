@@ -99,6 +99,13 @@ inline void freeVec(double *matchMatrixVec, double *insertionMatrixVec, double *
     _mm_free(prev_hap_bases_lengths);
 }
 
+inline void freeVec(bool *&constantsAreInitialized, bool *&initialized, INT_TYPE *&prev_hap_bases_lengths)
+{
+    _mm_free(constantsAreInitialized);
+    _mm_free(initialized);
+    _mm_free(prev_hap_bases_lengths);
+}
+
 inline void initializeVec(double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, bool &constantsAreInitialized, bool &initialized, const int32_t maxHaplotypeLength)
 {
     const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
@@ -1186,16 +1193,8 @@ int32_t computeReadLikelihoodGivenHaplotypeLog10Vec(const int8_t *hap_bases, con
     return status;
 }
 
-int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t t, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength)
+int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t t, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength, const int32_t totalThreads)
 {
-    int32_t totalThreads = 1;
-#ifdef _OPENMP
-#pragma omp parallel
-    {
-        totalThreads = omp_get_num_threads();
-    }
-#endif
-    double *matchToMatchLog10, *matchToMatchProb, *qualToErrorProbCache, *qualToProbLog10Cache;
     INT_TYPE batchSize, roundedBatchSize;
 
 #if defined(IS_INT32) && IS_INT32
@@ -1219,8 +1218,9 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
     const INT_TYPE *hap_bases_lengths = hap_lengths;
     const INT_TYPE *read_bases_lengths = read_lengths;
 #endif
-    int32_t initStatus = init(matchToMatchLog10, matchToMatchProb, qualToErrorProbCache, qualToProbLog10Cache);
-    initVec();
+
+    ProbabilityCache &probCache = ProbabilityCache::getInstance();
+    int32_t initStatus = probCache.initialize();
 
     if (initStatus != PDHMM_SUCCESS)
     {
@@ -1228,26 +1228,44 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
         _mm_free(hap_bases_lengths);
         _mm_free(read_bases_lengths);
 #endif
-        freeInit(matchToMatchLog10, matchToMatchProb, qualToErrorProbCache, qualToProbLog10Cache);
         return initStatus;
     }
 
-    double *g_matchMatrixVec, *g_insertionMatrixVec, *g_deletionMatrixVec, *g_branchMatchMatrixVec, *g_branchInsertionMatrixVec, *g_branchDeletionMatrixVec, *g_transitionVec, *g_priorVec;
+    // Access the caches
+    double *matchToMatchLog10 = probCache.getMatchToMatchLog10();
+    double *matchToMatchProb = probCache.getMatchToMatchProb();
+    double *qualToErrorProbCache = probCache.getQualToErrorProbCache();
+    double *qualToProbLog10Cache = probCache.getQualToProbLog10Cache();
+
+    initVec();
+
+    // Allocate memory for tables
+    DPTable &dpTable = DPTable::getInstance();
+    double *g_matchMatrixVec = dpTable.getMatchMatrix();
+    double *g_insertionMatrixVec = dpTable.getInsertionMatrix();
+    double *g_deletionMatrixVec = dpTable.getDeletionMatrix();
+    double *g_branchMatchMatrixVec = dpTable.getBranchMatchMatrix();
+    double *g_branchInsertionMatrixVec = dpTable.getBranchInsertionMatrix();
+    double *g_branchDeletionMatrixVec = dpTable.getBranchDeletionMatrix();
+    double *g_transitionVec = dpTable.getTransition();
+    double *g_priorVec = dpTable.getPrior();
 
     bool *g_constantsAreInitialized, *g_initialized;
     INT_TYPE *g_prev_hap_bases_lengths;
 
-    int32_t allocateStatus = allocateVec(g_matchMatrixVec, g_insertionMatrixVec, g_deletionMatrixVec, g_branchMatchMatrixVec, g_branchInsertionMatrixVec, g_branchDeletionMatrixVec, g_transitionVec, g_priorVec, g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths, maxReadLength, maxHaplotypeLength, totalThreads); // array allocation
+    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (INT_TYPE *)_mm_malloc(SIMD_WIDTH_DOUBLE * totalThreads * sizeof(INT_TYPE), ALIGN_SIZE);
     int32_t *status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
 
-    if (allocateStatus != PDHMM_SUCCESS || status == NULL)
+    if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
     {
 #if defined(IS_INT32) && IS_INT32
         _mm_free(hap_bases_lengths);
         _mm_free(read_bases_lengths);
 #endif
-        freeInit(matchToMatchLog10, matchToMatchProb, qualToErrorProbCache, qualToProbLog10Cache);
-        freeVec(g_matchMatrixVec, g_insertionMatrixVec, g_deletionMatrixVec, g_branchMatchMatrixVec, g_branchInsertionMatrixVec, g_branchDeletionMatrixVec, g_transitionVec, g_priorVec, g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+        freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+        _mm_free(status);
 
         return PDHMM_MEMORY_ALLOCATION_FAILED;
     }
@@ -1263,7 +1281,7 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
 
     roundedBatchSize = (batchSize / SIMD_WIDTH_DOUBLE) * SIMD_WIDTH_DOUBLE;
 #ifdef _OPENMP
-#pragma omp parallel
+#pragma omp parallel num_threads(totalThreads)
 #endif
     {
         int32_t tid = 0;
@@ -1288,6 +1306,7 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
         initialized = g_initialized + tid;
 
         INT_TYPE *prev_hap_bases_length = g_prev_hap_bases_lengths + (SIMD_WIDTH_DOUBLE * tid);
+        status[tid] = PDHMM_SUCCESS;
 #ifdef _OPENMP
 #pragma omp for
 #endif
@@ -1313,18 +1332,19 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
 
     int32_t hapIndexOffset = (int32_t)roundedBatchSize * maxHaplotypeLength;
     int32_t readIndexOffset = (int32_t)roundedBatchSize * maxReadLength;
-    computePDHMM_serial(matchToMatchProb, qualToErrorProbCache, g_matchMatrixVec, g_insertionMatrixVec, g_deletionMatrixVec, g_branchMatchMatrixVec, g_branchInsertionMatrixVec, g_branchDeletionMatrixVec, g_transitionVec, g_priorVec, hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, result + roundedBatchSize, batchSize - roundedBatchSize, hap_lengths + roundedBatchSize, read_lengths + roundedBatchSize, maxReadLength, maxHaplotypeLength);
-
-    freeVec(g_matchMatrixVec, g_insertionMatrixVec, g_deletionMatrixVec, g_branchMatchMatrixVec, g_branchInsertionMatrixVec, g_branchDeletionMatrixVec, g_transitionVec, g_priorVec, g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
-    freeInit(matchToMatchLog10, matchToMatchProb, qualToErrorProbCache, qualToProbLog10Cache);
+    computePDHMM_serial(matchToMatchProb, qualToErrorProbCache, g_matchMatrixVec, g_insertionMatrixVec, g_deletionMatrixVec, g_branchMatchMatrixVec, g_branchInsertionMatrixVec, g_branchDeletionMatrixVec, g_transitionVec, g_priorVec, hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, result + roundedBatchSize, batchSize - roundedBatchSize, hap_lengths + roundedBatchSize, read_lengths + roundedBatchSize, maxReadLength, maxHaplotypeLength, totalThreads);
 
     int32_t outputStatus = PDHMM_SUCCESS;
     for (int32_t i = 0; i < totalThreads; i++)
     {
         if (status[i] != PDHMM_SUCCESS)
+        {
             outputStatus = status[i];
+            break;
+        }
     }
     _mm_free(status);
+    freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
 
 #if defined(IS_INT32) && IS_INT32
     _mm_free(hap_bases_lengths);

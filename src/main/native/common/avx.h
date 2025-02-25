@@ -86,6 +86,25 @@ bool is_avx_supported()
     return true;
 }
 
+inline bool is_sse_supported()
+{
+    uint32_t a, b, c, d;
+    uint32_t sse_mask = (1 << 27) | bit_SSE2 | bit_SSE4_1;
+
+    __cpuid_count(1, 0, a, b, c, d);
+    if ((c & sse_mask) != sse_mask)
+    {
+        return false;
+    }
+
+    if (!check_xcr0_ymm())
+    {
+        return false;
+    }
+
+    return true;
+}
+
 /*
  * Determine if AVX-2 is supported. Returns true if supported.
  */

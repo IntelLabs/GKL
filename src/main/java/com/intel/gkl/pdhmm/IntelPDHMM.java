@@ -23,35 +23,100 @@
  */
 package com.intel.gkl.pdhmm;
 
+import com.intel.gkl.IntelGKLUtils;
 import com.intel.gkl.NativeLibraryLoader;
-import org.broadinstitute.gatk.nativebindings.NativeLibrary;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.broadinstitute.gatk.nativebindings.pdhmm.HaplotypeDataHolder;
+import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments;
+import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeBinding;
+import org.broadinstitute.gatk.nativebindings.pdhmm.ReadDataHolder;
+import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments.AVXLevel;
 
 import java.io.File;
 import java.lang.reflect.Array;
 import java.util.Objects;
 
-public class IntelPDHMM implements NativeLibrary {
-    private static final Object lock_class = new Object();
-    private static final String NATIVE_LIBRARY_NAME;
-    private static boolean initialized;
+public class IntelPDHMM implements PDHMMNativeBinding {
+    private final static Log logger = LogFactory.getLog(IntelPDHMM.class);
+    private static final String NATIVE_LIBRARY_NAME = "gkl_pdhmm";
+    private IntelGKLUtils gklUtils = new IntelGKLUtils();
 
-    static {
-        NATIVE_LIBRARY_NAME = "gkl_pdhmm";
-        initialized = false;
+    /**
+     * Loads the Intel GKL Utils and the native library.
+     * This method is synchronized to ensure thread safety.
+     *
+     * @param tempDir the temporary directory where the native library is located
+     * @return true if both the Intel GKL Utils and the native library are
+     *         successfully loaded, false otherwise
+     */
+    @Override
+    public synchronized boolean load(File tempDir) {
+        boolean isLoaded = gklUtils.load(null);
+
+        if (!isLoaded) {
+            logger.warn("Intel GKL Utils not loaded");
+            return false;
+        }
+
+        return NativeLibraryLoader.load(tempDir, NATIVE_LIBRARY_NAME);
+
+    }
+
+    /**
+     * Initializes the IntelPDHMM instance with the provided native arguments.
+     *
+     * @param args the PDHMMNativeArguments containing the initialization
+     *             parameters.
+     */
+    @Override
+    public void initialize(PDHMMNativeArguments args) {
+        if (args == null) {
+            args = new PDHMMNativeArguments();
+            args.maxNumberOfThreads = 1;
+            args.avxLevel = AVXLevel.AVX512;
+            args.maxMemoryInMB = 512;
+        }
+        initNative(ReadDataHolder.class, HaplotypeDataHolder.class,
+                args.maxNumberOfThreads, args.avxLevel.ordinal(), args.maxMemoryInMB);
     }
 
     @Override
-    public boolean load(File tempDir) {
-        synchronized (lock_class) {
-            if (!NativeLibraryLoader.load(tempDir, NATIVE_LIBRARY_NAME)) {
-                return false;
-            }
-            if (!initialized) {
-                initialized = true;
-            }
+    public void computeLikelihoods(ReadDataHolder[] readDataArray, HaplotypeDataHolder[] haplotypeDataArray,
+            double[] likelihoodArray) throws NullPointerException, OutOfMemoryError, IllegalArgumentException {
+        if (readDataArray == null || haplotypeDataArray == null || likelihoodArray == null) {
+            throw new NullPointerException(
+                    "One or more input arrays are null. Please ensure readDataArray, haplotypeDataArray, and likelihoodArray are properly initialized.");
         }
-        initNative();
-        return true;
+
+        if (likelihoodArray.length != readDataArray.length * haplotypeDataArray.length) {
+            throw new IllegalArgumentException(
+                    "likelihoodArray length must be equal to readDataArray length * haplotypeDataArray length");
+        }
+
+        try {
+            computeLikelihoodsNative(readDataArray, haplotypeDataArray, likelihoodArray);
+        } catch (OutOfMemoryError e) {
+            logger.warn(
+                    "Exception thrown from native PDHMM computeLikelihoodsNative function call " + e.getMessage());
+            throw new OutOfMemoryError("Memory allocation failed");
+        } catch (IllegalArgumentException e) {
+            logger.warn(
+                    "Exception thrown from native PDHMM computeLikelihoodsNative function call " + e.getMessage());
+            throw new IllegalArgumentException("Ran into invalid argument issue");
+        } catch (RuntimeException e) {
+            logger.warn(
+                    "Exception thrown from native PDHMM computeLikelihoodsNative function call " + e.getMessage());
+            throw new RuntimeException(
+                    "Runtime exception thrown from native pdhmm function call " + e.getMessage());
+        }
+
+    }
+
+    @Override
+    public void done() {
+        doneNative();
     }
 
     private static void checkArraySize(Object array, int expectedSize, String arrayName) {
@@ -110,16 +175,18 @@ public class IntelPDHMM implements NativeLibrary {
         }
     }
 
-    public void done() {
-        doneNative();
-    }
-
-    private native static void initNative();
+    private native static void initNative(Class<?> readDataHolderClass,
+            Class<?> haplotypeDataHolderClass, int maxThreads, int avxLevel, int maxMemoryInMB);
 
     private native double[] computePDHMMNative(byte[] hap_bases, byte[] hap_pdbases, byte[] read_bases,
             byte[] read_qual,
             byte[] read_ins_qual, byte[] read_del_qual, byte[] gcp, long[] hap_lengths, long[] read_lengths,
             int testcase, int maxHapLength, int maxReadLength);
 
+    private native void computeLikelihoodsNative(Object[] readDataArray,
+            Object[] haplotypeDataArray,
+            double[] likelihoodArray);
+
     private native static void doneNative();
+
 }

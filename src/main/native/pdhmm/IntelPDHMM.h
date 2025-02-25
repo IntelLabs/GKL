@@ -29,7 +29,7 @@ extern "C"
 {
 #endif
 
-    JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj);
+    JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint max_threads, jint avxLevel, jint maxMemoryInMB);
 
     /*
      * Class:     com_intel_gkl_pdhmm_IntelPDHMM
@@ -37,6 +37,13 @@ extern "C"
      * Signature: ()Z
      */
     JNIEXPORT jdoubleArray JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computePDHMMNative(JNIEnv *env, jobject obj, jbyteArray jhap_bases, jbyteArray jhap_pdbases, jbyteArray jread_bases, jbyteArray jread_qual, jbyteArray jread_ins_qual, jbyteArray jread_del_qual, jbyteArray jgcp, jlongArray jhap_lengths, jlongArray jread_lengths, jint testcase, jint maxHapLength, jint maxReadLength);
+
+    /*
+     * Class:     com_intel_gkl_pairhmm_IntelPairHmm
+     * Method:    computeLikelihoodsNative
+     * Signature: ([Ljava/lang/Object;[Ljava/lang/Object;[D)V
+     */
+    JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computeLikelihoodsNative(JNIEnv *, jobject, jobjectArray, jobjectArray, jdoubleArray);
 
     JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_doneNative(JNIEnv *env, jclass obj);
 

@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 using namespace std;
+
 double INITIAL_CONDITION = pow(2, 1020);
 double INITIAL_CONDITION_LOG10 = log10(INITIAL_CONDITION);
 const double neg_infinity = -1e10;
@@ -43,6 +44,7 @@ int32_t fastRound(double d)
 }
 
 bool isValidLog10Probability(double result) { return result <= 0.0; }
+
 double JacobianLogTable::get(double difference)
 {
     int index = fastRound(difference * INV_STEP);
@@ -51,9 +53,19 @@ double JacobianLogTable::get(double difference)
 
 void JacobianLogTable::initCache()
 {
+    if (cache != NULL)
+    {
+        // If cache is already initialized, free it first
+        freeCache();
+    }
+
     int from = 0;
     int to = (int)(MAX_TOLERANCE / TABLE_STEP) + 1;
     double *result = (double *)_mm_malloc((to - from) * sizeof(double), 64);
+    // if (result == NULL)
+    // {
+    //     throw std::bad_alloc();
+    // }
     for (int i = from; i < to; i++)
     {
         result[i - from] = cacheIntToDouble(i);
@@ -63,7 +75,11 @@ void JacobianLogTable::initCache()
 
 void JacobianLogTable::freeCache()
 {
-    _mm_free(cache);
+    if (cache != NULL)
+    {
+        _mm_free(cache);
+        cache = NULL;
+    }
 }
 
 double JacobianLogTable::cacheIntToDouble(int k)
@@ -88,6 +104,6 @@ double approximateLog10SumLog10(double a, double b)
     // integer quantization we have pre-stored correction for 0,0.1,0.2,... 10.0
     double diff = b - a;
     return b + (diff < JacobianLogTable::MAX_TOLERANCE
-                    ? JacobianLogTable::get(diff)
+                    ? JacobianLogTable::getInstance().get(diff)
                     : 0.0);
 }

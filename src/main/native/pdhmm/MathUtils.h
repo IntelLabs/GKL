@@ -35,23 +35,32 @@ extern const double INV_LN10;
 class JacobianLogTable
 {
 public:
-    static double *cache;
+    static JacobianLogTable &getInstance()
+    {
+        static JacobianLogTable instance;
+        return instance;
+    }
+
+    double get(double difference);
+    void initCache();
+    void freeCache();
+
     static double TABLE_STEP;
     static double INV_STEP;
     static double MAX_TOLERANCE;
-    static double get(double difference);
-
-    static void initCache();
-    static void freeCache();
+    static double *cache;
 
 private:
-    static double cacheIntToDouble(int i);
+    JacobianLogTable() = default;
+    ~JacobianLogTable() = default;
+    JacobianLogTable(const JacobianLogTable &) = delete;
+    JacobianLogTable &operator=(const JacobianLogTable &) = delete;
+
+    double cacheIntToDouble(int i);
 };
 
 double approximateLog10SumLog10(double a, double b);
-
 int32_t fastRound(double d);
-
 bool isValidLog10Probability(double result);
 
 enum PartiallyDeterminedHaplotype
@@ -63,7 +72,6 @@ enum PartiallyDeterminedHaplotype
     C = 16,
     G = 32,
     T = 64,
-
 };
 
 #endif

@@ -25,6 +25,8 @@
 #include <debug.h>
 #include "pdhmm-serial.h"
 #include "avx2_impl.h"
+#include <omp.h>
+#include "JavaData.h"
 #ifndef __APPLE__
 #include "avx512_impl.h"
 #endif
@@ -33,49 +35,101 @@
 #include <cassert>
 #endif
 
-int32_t (*g_computePDHMM)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, double *result, int64_t t, const int64_t *hap_lengths, const int64_t *read_lengths, int32_t maxReadLength, int32_t maxHaplotypeLength);
+#include "pdhmm-implementation.h"
+#include <chrono>
 
-inline bool is_sse_supported()
+// int time_for_batch = 0;
+// int time_for_compute = 0;
+
+JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint max_threads, jint avxLevel, jint maxMemoryInMB)
 {
-    uint32_t a, b, c, d;
-    uint32_t sse_mask = (1 << 27) | bit_SSE2 | bit_SSE4_1;
-
-    __cpuid_count(1, 0, a, b, c, d);
-    if ((c & sse_mask) != sse_mask)
+    initializeNative((int)max_threads, (AVXLevel)avxLevel, (int)maxMemoryInMB);
+    try
     {
-        return false;
+        JavaData::InitializeFieldIDs(env, readDataHolder, haplotypeDataHolder);
     }
-
-    if (!check_xcr0_ymm())
+    catch (JavaException &e)
     {
-        return false;
+        jclass exceptionClass = env->FindClass(e.classPath);
+        if (!exceptionClass)
+        {
+            env->FatalError("Unable to find Java exception class");
+            return;
+        }
+        env->ThrowNew(exceptionClass, e.message);
     }
-
-    return true;
 }
 
-JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj)
+JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computeLikelihoodsNative(JNIEnv *env, jobject obj, jobjectArray readDataArray, jobjectArray haplotypeDataArray, jdoubleArray likelihoodArray)
 {
-    if (is_avx512_supported())
-    {
-#ifndef __APPLE__
-        INFO("Using CPU-supported AVX-512 instructions.");
-        g_computePDHMM = computePDHMM_fp_avx512;
+    // Step 0: Initialize JavaData with current data information
+    ComputeConfig &config = ComputeConfig::getInstance();
+    JavaData javaData(env, readDataArray, haplotypeDataArray, config.getMaxMemoryInMB());
 
-#else
-        assert(false);
-#endif
-    }
-    else if (is_avx_supported() && is_avx2_supported() && is_sse_supported())
-    {
-        INFO("Using CPU-supported AVX-2, AVX and SSE instructions.");
-        g_computePDHMM = computePDHMM_fp_avx2;
-    }
-    else
-    {
-        INFO("Using Serial Implementation.");
-        g_computePDHMM = computePDHMM_serial;
-    }
+    // // Allocate DP Table based on max haplotype length
+    // allocateDPTable(javaData.getMaxHaplotypeLength(), javaData.getMaxReadLength());
+
+    // // Get the total number of batches
+    // int totalBatch = javaData.getTotalBatch();
+
+    // // Get the pointer to the likelihood array
+    // jdouble *likelihoods = env->GetDoubleArrayElements(likelihoodArray, NULL);
+    // if (likelihoods == NULL)
+    // {
+    //     env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
+    //     return;
+    // }
+
+    // // Process each batch
+    // for (int i = 0; i < totalBatch; i++)
+    // {
+    //     // auto start_time = std::chrono::high_resolution_clock::now();
+
+    //     // Get the next batch of data
+    //     PDHMMInputData currBatch = javaData.getNextBatch();
+
+    //     // auto end_time = std::chrono::high_resolution_clock::now();
+    //     // time_for_batch += static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+
+    //     // Compute PDHMM for the current batch
+    //     // start_time = std::chrono::high_resolution_clock::now();
+
+    //     int32_t status = computePDHMM(currBatch);
+    //     // end_time = std::chrono::high_resolution_clock::now();
+    //     // time_for_compute += static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+
+    //     if (status != PDHMM_SUCCESS)
+    //     {
+    //         // Release the likelihood array and throw an appropriate exception
+    //         env->ReleaseDoubleArrayElements(likelihoodArray, likelihoods, 0);
+    //         if (status == PDHMM_MEMORY_ALLOCATION_FAILED)
+    //         {
+    //             env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
+    //         }
+    //         else if (status == PDHMM_INPUT_DATA_ERROR)
+    //         {
+    //             env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "Error while calculating PDHMM. Input arrays aren't valid.");
+    //         }
+    //         else if (status == PDHMM_FAILURE)
+    //         {
+    //             env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failure while computing PDHMM.");
+    //         }
+    //         else if (status == PDHMM_MEMORY_ACCESS_ERROR)
+    //         {
+    //             env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Out of bound memory access while computing PDHMM.");
+    //         }
+    //         return;
+    //     }
+
+    //     // Copy the results from the current batch to the likelihood array
+    //     for (int j = 0; j < currBatch.getT(); j++)
+    //     {
+    //         likelihoods[i * javaData.getBatchSize() + j] = currBatch.getResult()[j];
+    //     }
+    // }
+
+    // // Release the likelihood array
+    // env->ReleaseDoubleArrayElements(likelihoodArray, likelihoods, 0);
 }
 
 /*
@@ -85,6 +139,8 @@ JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *en
  */
 JNIEXPORT jdoubleArray JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computePDHMMNative(JNIEnv *env, jobject obj, jbyteArray jhap_bases, jbyteArray jhap_pdbases, jbyteArray jread_bases, jbyteArray jread_qual, jbyteArray jread_ins_qual, jbyteArray jread_del_qual, jbyteArray jgcp, jlongArray jhap_lengths, jlongArray jread_lengths, jint testcase, jint maxHapLength, jint maxReadLength)
 {
+    // Allocate DP Table based on max haplotype length
+    allocateDPTable(maxHapLength, maxReadLength);
 
     jdoubleArray jresult;
     jresult = env->NewDoubleArray(testcase);
@@ -139,7 +195,7 @@ JNIEXPORT jdoubleArray JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computePDHMMN
         env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
         return NULL;
     }
-    int32_t status = g_computePDHMM(hap_bases, hap_pdbases, read_bases, read_qual, read_ins_qual, read_del_qual, gcp, result, testcase, (int64_t *)hap_lengths, (int64_t *)read_lengths, maxReadLength, maxHapLength);
+    int32_t status = computePDHMM(hap_bases, hap_pdbases, read_bases, read_qual, read_ins_qual, read_del_qual, gcp, result, testcase, (int64_t *)hap_lengths, (int64_t *)read_lengths, maxReadLength, maxHapLength);
 
     // release buffers
     env->ReleasePrimitiveArrayCritical(jhap_bases, hap_bases, 0);
@@ -185,4 +241,7 @@ JNIEXPORT jdoubleArray JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computePDHMMN
 
 JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_doneNative(JNIEnv *env, jclass obj)
 {
+    doneNative();
+    // INFO("Total time for creating batch: %d ms", time_for_batch);
+    // INFO("Total time for computing pdhmm: %d ms", time_for_compute);
 }
