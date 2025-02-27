@@ -38,6 +38,10 @@ import java.io.File;
 import java.lang.reflect.Array;
 import java.util.Objects;
 
+/**
+ * Provides a native PDHMM implementation accelerated for the Intel
+ * Architecture.
+ */
 public class IntelPDHMM implements PDHMMNativeBinding {
     private final static Log logger = LogFactory.getLog(IntelPDHMM.class);
     private static final String NATIVE_LIBRARY_NAME = "gkl_pdhmm";
@@ -132,6 +136,28 @@ public class IntelPDHMM implements PDHMMNativeBinding {
         }
     }
 
+    /**
+     * Computes the PDHMM for the given batch of input data.
+     *
+     * @param hap_bases     the haplotype bases
+     * @param hap_pdbases   the haplotype PD bases
+     * @param read_bases    the read bases
+     * @param read_qual     the read quality scores
+     * @param read_ins_qual the read insertion quality scores
+     * @param read_del_qual the read deletion quality scores
+     * @param gcp           the gap compression penalties
+     * @param hap_lengths   the lengths of the haplotypes
+     * @param read_lengths  the lengths of the reads
+     * @param batchSize     the number of batches
+     * @param maxHapLength  the maximum length of the haplotypes
+     * @param maxReadLength the maximum length of the reads
+     * @return an array of computed PDHMM values
+     * @throws IllegalArgumentException if any of the input arrays are null or have
+     *                                  incorrect sizes
+     * @throws OutOfMemoryError         if memory allocation fails
+     * @throws RuntimeException         if a runtime exception occurs during the
+     *                                  native function call
+     */
     public double[] computePDHMM(byte[] hap_bases, byte[] hap_pdbases, byte[] read_bases, byte[] read_qual,
             byte[] read_ins_qual, byte[] read_del_qual, byte[] gcp, long[] hap_lengths, long[] read_lengths,
             int batchSize, int maxHapLength, int maxReadLength) {
