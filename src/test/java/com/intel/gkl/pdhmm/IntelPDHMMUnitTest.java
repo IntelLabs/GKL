@@ -25,6 +25,7 @@ import org.broadinstitute.gatk.nativebindings.pdhmm.HaplotypeDataHolder;
 import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments;
 import org.broadinstitute.gatk.nativebindings.pdhmm.ReadDataHolder;
 import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments.AVXLevel;
+import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments.OpenMPSetting;
 
 import htsjdk.samtools.SAMUtils;
 
@@ -99,8 +100,9 @@ public class IntelPDHMMUnitTest {
         intelPDHMM = new IntelPDHMM();
         PDHMMNativeArguments nativeArguments = new PDHMMNativeArguments();
         nativeArguments.maxNumberOfThreads = 2;
-        nativeArguments.avxLevel = AVXLevel.AVX512;
-        nativeArguments.maxMemoryInMB = 10;
+        nativeArguments.avxLevel = AVXLevel.FASTEST_AVAILABLE;
+        nativeArguments.setMaxMemoryInMB(10);
+        nativeArguments.openMPSetting = OpenMPSetting.FASTEST_AVAILABLE;
         intelPDHMM.initialize(nativeArguments);
     }
 

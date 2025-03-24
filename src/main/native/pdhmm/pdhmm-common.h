@@ -49,6 +49,19 @@
 #include <immintrin.h>
 #include <algorithm>
 
+class JavaException : public std::exception
+{
+public:
+    const char *classPath;
+    const char *message;
+
+    JavaException(const char *classPath, const char *message)
+        : classPath(classPath),
+          message(message)
+    {
+    }
+};
+
 enum HMMState
 {
     // The regular state

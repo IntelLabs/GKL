@@ -24,6 +24,63 @@
 #ifndef _AVX2_FUNCTIONS_H
 #define _AVX2_FUNCTIONS_H
 
+#undef VEC_DOUBLE_TYPE
+#undef VEC_INT_TYPE
+#undef INT_TYPE
+#undef IS_INT32
+#undef VEC_LONG_TYPE
+#undef VEC_MASK_TYPE
+#undef VEC_DOUBLE_MASK_TYPE
+#undef SIMD_WIDTH_DOUBLE
+
+#undef VEC_ADD_INT
+#undef VEC_ADD_PD
+#undef VEC_AND_INT
+#undef VEC_AND_MASK
+#undef VEC_AND_NOT_INT
+#undef VEC_BLEND_INT
+#undef VEC_BLEND_PD_DOUBLE_MASK
+#undef VEC_CAST_INT_PD
+#undef VEC_CAST_PD_LONG
+#undef VEC_CMP_EQ_INT
+#undef VEC_CMP_EQ_PD
+#undef VEC_CMP_GT_PD
+#undef VEC_CMP_LT_INT
+#undef VEC_CMP_LT_PD
+#undef VEC_CMP_NE_MASK
+#undef VEC_CMP_NE_DOUBLE_MASK
+#undef VEC_CVT_INT_LONG
+#undef VEC_CVT_INT_PD
+#undef VEC_CVT_PD_INT
+#undef VEC_DIV_PD
+#undef VEC_GATHER_PD
+#undef VEC_GATHER_PD_LONG_INDEX
+#undef VEC_LOAD_INT
+#undef VEC_LOAD_PD
+#undef VEC_LOADU_INT
+#undef VEC_MAX_INT
+#undef VEC_MAX_PD
+#undef VEC_MIN_INT
+#undef VEC_MIN_PD
+#undef VEC_MUL_PD
+#undef VEC_MULLO_INT
+#undef VEC_OR_MASK
+#undef VEC_SET0_INT
+#undef VEC_SET0_PD
+#undef VEC_SET1_INT
+#undef VEC_SET1_PD
+#undef VEC_SRLI_INT
+#undef VEC_STORE_PD
+#undef VEC_STORE_INT
+#undef VEC_SUB_INT
+#undef VEC_SUB_PD
+
+#undef VEC_BLEND_LONG_DOUBLE_MASK
+#undef VEC_BLEND_PD
+#undef VEC_CMP_LE_INT
+#undef VEC_CMP_NE_INT
+#undef VEC_CVT_ROUND_PD_LONG
+
 #define VEC_DOUBLE_TYPE __m256d
 #define VEC_INT_TYPE __m128i
 #define INT_TYPE int32_t
@@ -33,6 +90,7 @@
 #define VEC_DOUBLE_MASK_TYPE __m256d
 #define SIMD_WIDTH_DOUBLE 4
 
+// Primary Macros
 #define VEC_ADD_INT(__v1, __v2) \
     _mm_add_epi32(__v1, __v2)
 
@@ -51,12 +109,6 @@
 #define VEC_BLEND_INT(__v1, __v2, __mask) \
     _mm_blendv_epi8(__v1, __v2, __mask)
 
-#define VEC_BLEND_LONG_DOUBLE_MASK(__v1, __v2, __mask) \
-    _mm256_blendv_epi8(__v1, __v2, VEC_CAST_PD_LONG(__mask))
-
-#define VEC_BLEND_PD(__v1, __v2, __mask) \
-    _mm256_blendv_pd(__v1, __v2, VEC_CAST_INT_PD(VEC_CVT_INT_LONG(__mask)))
-
 #define VEC_BLEND_PD_DOUBLE_MASK(__v1, __v2, __mask) \
     _mm256_blendv_pd(__v1, __v2, __mask)
 
@@ -74,12 +126,6 @@
 
 #define VEC_CMP_GT_PD(__v1, __v2) \
     _mm256_cmp_pd(__v1, __v2, _CMP_GT_OQ)
-
-#define VEC_CMP_LE_INT(__v1, __v2) \
-    VEC_OR_MASK(VEC_CMP_LT_INT(__v1, __v2), VEC_CMP_EQ_INT(__v1, __v2))
-
-#define VEC_CMP_NE_INT(__v1, __v2) \
-    VEC_AND_NOT_INT(VEC_CMP_EQ_INT(__v1, __v2), VEC_SET1_INT(0xFFFFFFFF))
 
 #define VEC_CMP_LT_INT(__v1, __v2) \
     _mm_cmplt_epi32(__v1, __v2)
@@ -101,9 +147,6 @@
 
 #define VEC_CVT_PD_INT(__v1) \
     _mm256_cvtpd_epi32(__v1)
-
-#define VEC_CVT_ROUND_PD_LONG(__v1) \
-    VEC_CVT_INT_LONG(VEC_CVT_PD_INT(_mm256_round_pd(__v1, (_MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC))))
 
 #define VEC_DIV_PD(__v1, __v2) \
     _mm256_div_pd(__v1, __v2)
@@ -170,5 +213,22 @@
 
 #define VEC_SUB_PD(__v1, __v2) \
     _mm256_sub_pd(__v1, __v2)
+
+// Secondary Macros
+
+#define VEC_BLEND_LONG_DOUBLE_MASK(__v1, __v2, __mask) \
+    _mm256_blendv_epi8(__v1, __v2, VEC_CAST_PD_LONG(__mask))
+
+#define VEC_BLEND_PD(__v1, __v2, __mask) \
+    _mm256_blendv_pd(__v1, __v2, VEC_CAST_INT_PD(VEC_CVT_INT_LONG(__mask)))
+
+#define VEC_CMP_LE_INT(__v1, __v2) \
+    VEC_OR_MASK(VEC_CMP_LT_INT(__v1, __v2), VEC_CMP_EQ_INT(__v1, __v2))
+
+#define VEC_CMP_NE_INT(__v1, __v2) \
+    VEC_AND_NOT_INT(VEC_CMP_EQ_INT(__v1, __v2), VEC_SET1_INT(0xFFFFFFFF))
+
+#define VEC_CVT_ROUND_PD_LONG(__v1) \
+    VEC_CVT_INT_LONG(VEC_CVT_PD_INT(_mm256_round_pd(__v1, (_MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC))))
 
 #endif

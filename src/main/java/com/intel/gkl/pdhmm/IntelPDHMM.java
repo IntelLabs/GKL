@@ -33,6 +33,7 @@ import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments;
 import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeBinding;
 import org.broadinstitute.gatk.nativebindings.pdhmm.ReadDataHolder;
 import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments.AVXLevel;
+import org.broadinstitute.gatk.nativebindings.pdhmm.PDHMMNativeArguments.OpenMPSetting;
 
 import java.io.File;
 import java.lang.reflect.Array;
@@ -79,11 +80,12 @@ public class IntelPDHMM implements PDHMMNativeBinding {
         if (args == null) {
             args = new PDHMMNativeArguments();
             args.maxNumberOfThreads = 1;
-            args.avxLevel = AVXLevel.AVX512;
-            args.maxMemoryInMB = 512;
+            args.avxLevel = AVXLevel.FASTEST_AVAILABLE;
+            args.setMaxMemoryInMB(512);
+            args.openMPSetting = OpenMPSetting.FASTEST_AVAILABLE;
         }
-        initNative(ReadDataHolder.class, HaplotypeDataHolder.class,
-                args.maxNumberOfThreads, args.avxLevel.ordinal(), args.maxMemoryInMB);
+        initNative(ReadDataHolder.class, HaplotypeDataHolder.class, args.openMPSetting.ordinal(),
+                args.maxNumberOfThreads, args.avxLevel.ordinal(), args.getMaxMemoryInMB());
     }
 
     @Override
@@ -202,7 +204,7 @@ public class IntelPDHMM implements PDHMMNativeBinding {
     }
 
     private native static void initNative(Class<?> readDataHolderClass,
-            Class<?> haplotypeDataHolderClass, int maxThreads, int avxLevel, int maxMemoryInMB);
+            Class<?> haplotypeDataHolderClass, int openMPSetting, int maxThreads, int avxLevel, int maxMemoryInMB);
 
     private native double[] computePDHMMNative(byte[] hap_bases, byte[] hap_pdbases, byte[] read_bases,
             byte[] read_qual,

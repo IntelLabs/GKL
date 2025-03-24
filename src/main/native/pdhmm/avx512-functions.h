@@ -24,6 +24,58 @@
 #ifndef _AVX512_FUNCTIONS_H
 #define _AVX512_FUNCTIONS_H
 
+#undef VEC_DOUBLE_TYPE
+#undef VEC_INT_TYPE
+#undef INT_TYPE
+#undef IS_INT32
+#undef VEC_LONG_TYPE
+#undef VEC_MASK_TYPE
+#undef VEC_DOUBLE_MASK_TYPE
+#undef SIMD_WIDTH_DOUBLE
+
+#undef VEC_ADD_INT
+#undef VEC_ADD_PD
+#undef VEC_AND_INT
+#undef VEC_AND_MASK
+#undef VEC_BLEND_INT
+#undef VEC_BLEND_PD_DOUBLE_MASK
+#undef VEC_BLEND_LONG_DOUBLE_MASK
+#undef VEC_BLEND_PD
+
+#undef VEC_CMP_EQ_INT
+#undef VEC_CMP_EQ_PD
+#undef VEC_CMP_GT_PD
+#undef VEC_CMP_LE_INT
+#undef VEC_CMP_NE_INT
+#undef VEC_CMP_LT_INT
+#undef VEC_CMP_LT_PD
+#undef VEC_CMP_NE_MASK
+#undef VEC_CMP_NE_DOUBLE_MASK
+#undef VEC_CVT_INT_PD
+#undef VEC_CVT_ROUND_PD_LONG
+#undef VEC_DIV_PD
+#undef VEC_GATHER_PD
+#undef VEC_GATHER_PD_LONG_INDEX
+#undef VEC_LOAD_INT
+#undef VEC_LOAD_PD
+#undef VEC_LOADU_INT
+#undef VEC_MAX_INT
+#undef VEC_MAX_PD
+#undef VEC_MIN_INT
+#undef VEC_MIN_PD
+#undef VEC_MUL_PD
+#undef VEC_MULLO_INT
+#undef VEC_OR_MASK
+#undef VEC_SET0_INT
+#undef VEC_SET0_PD
+#undef VEC_SET1_INT
+#undef VEC_SET1_PD
+#undef VEC_SRLI_INT
+#undef VEC_STORE_PD
+#undef VEC_STORE_INT
+#undef VEC_SUB_INT
+#undef VEC_SUB_PD
+
 #define VEC_DOUBLE_TYPE __m512d
 #define VEC_INT_TYPE __m512i
 #define INT_TYPE int64_t
@@ -32,6 +84,8 @@
 #define VEC_MASK_TYPE __mmask8
 #define VEC_DOUBLE_MASK_TYPE __mmask8
 #define SIMD_WIDTH_DOUBLE 8
+
+// Primary Macros
 
 #define VEC_ADD_INT(__v1, __v2) \
     _mm512_add_epi64(__v1, __v2)

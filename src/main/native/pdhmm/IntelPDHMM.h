@@ -29,7 +29,7 @@ extern "C"
 {
 #endif
 
-    JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint max_threads, jint avxLevel, jint maxMemoryInMB);
+    JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint openMPSetting, jint max_threads, jint avxLevel, jint maxMemoryInMB);
 
     /*
      * Class:     com_intel_gkl_pdhmm_IntelPDHMM

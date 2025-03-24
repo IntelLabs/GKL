@@ -25,17 +25,6 @@
 #define MATHUTILS_AVX
 #include "MathUtils.h"
 
-static VEC_INT_TYPE SNPVec, AVec, CVec, GVec, TVec;
-
-inline void initVec()
-{
-    SNPVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::SNP);
-    AVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::A);
-    CVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::C);
-    GVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::G);
-    TVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::T);
-}
-
 inline VEC_LONG_TYPE fastRound(VEC_DOUBLE_TYPE d)
 {
     VEC_DOUBLE_MASK_TYPE mask1 = VEC_CMP_GT_PD(d, VEC_SET0_PD());

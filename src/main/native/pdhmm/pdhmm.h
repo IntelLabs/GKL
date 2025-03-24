@@ -28,85 +28,16 @@
 #include <omp.h>
 #endif
 
-inline INT_TYPE roundDownToNearestMultipleOf(INT_TYPE val, INT_TYPE mul) { return (val / mul) * mul; }
+inline INT_TYPE CONCAT(roundDownToNearestMultipleOf_, SIMD_ENGINE)(INT_TYPE val, INT_TYPE mul) { return (val / mul) * mul; }
 
-inline int32_t allocateVec(double *&matchMatrixVec, double *&insertionMatrixVec, double *&deletionMatrixVec, double *&branchMatchMatrixVec, double *&branchInsertionMatrixVec, double *&branchDeletionMatrixVec, double *&transitionVec, double *&priorVec, bool *&constantsAreInitialized, bool *&initialized, INT_TYPE *&prev_hap_bases_lengths, const int32_t maxReadLength, const int32_t maxHaplotypeLength, const int32_t totalThreads)
-{
-    const int32_t paddedMaxReadLength = maxReadLength + 1;
-    const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
-    int32_t sizeOfTables = static_cast<int32_t>(paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE * totalThreads * sizeof(double));
-
-    matchMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
-    insertionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
-    deletionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
-    branchMatchMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
-    branchInsertionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
-    branchDeletionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
-
-    priorVec = (double *)_mm_malloc(paddedMaxHaplotypeLength * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * totalThreads * sizeof(double), ALIGN_SIZE);
-
-    transitionVec = (double *)_mm_malloc(TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * totalThreads * sizeof(double), ALIGN_SIZE);
-
-    constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-
-    prev_hap_bases_lengths = (INT_TYPE *)_mm_malloc(SIMD_WIDTH_DOUBLE * totalThreads * sizeof(INT_TYPE), ALIGN_SIZE);
-
-    if (matchMatrixVec == NULL || insertionMatrixVec == NULL || deletionMatrixVec == NULL || branchMatchMatrixVec == NULL || branchInsertionMatrixVec == NULL || branchDeletionMatrixVec == NULL || priorVec == NULL || transitionVec == NULL || constantsAreInitialized == NULL || initialized == NULL || prev_hap_bases_lengths == NULL)
-    {
-        _mm_free(matchMatrixVec);
-        _mm_free(insertionMatrixVec);
-        _mm_free(deletionMatrixVec);
-        _mm_free(branchMatchMatrixVec);
-        _mm_free(branchInsertionMatrixVec);
-        _mm_free(branchDeletionMatrixVec);
-        _mm_free(priorVec);
-        _mm_free(transitionVec);
-        _mm_free(constantsAreInitialized);
-        _mm_free(initialized);
-        _mm_free(prev_hap_bases_lengths);
-        return PDHMM_MEMORY_ALLOCATION_FAILED;
-    }
-
-    memset(matchMatrixVec, 0, sizeOfTables);
-    memset(insertionMatrixVec, 0, sizeOfTables);
-    memset(deletionMatrixVec, 0, sizeOfTables);
-    memset(branchMatchMatrixVec, 0, sizeOfTables);
-    memset(branchInsertionMatrixVec, 0, sizeOfTables);
-    memset(branchDeletionMatrixVec, 0, sizeOfTables);
-
-    memset(transitionVec, 0, TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * totalThreads * sizeof(double));
-    memset(priorVec, 0, paddedMaxHaplotypeLength * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * totalThreads * sizeof(double));
-
-    memset(constantsAreInitialized, 0, totalThreads * sizeof(bool));
-    memset(initialized, 1, totalThreads * sizeof(bool));
-
-    return PDHMM_SUCCESS;
-}
-
-inline void freeVec(double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, double *transitionVec, double *priorVec, bool *&constantsAreInitialized, bool *&initialized, INT_TYPE *&prev_hap_bases_lengths)
-{
-    _mm_free(matchMatrixVec);
-    _mm_free(insertionMatrixVec);
-    _mm_free(deletionMatrixVec);
-    _mm_free(branchMatchMatrixVec);
-    _mm_free(branchInsertionMatrixVec);
-    _mm_free(branchDeletionMatrixVec);
-    _mm_free(transitionVec);
-    _mm_free(priorVec);
-    _mm_free(constantsAreInitialized);
-    _mm_free(initialized);
-    _mm_free(prev_hap_bases_lengths);
-}
-
-inline void freeVec(bool *&constantsAreInitialized, bool *&initialized, INT_TYPE *&prev_hap_bases_lengths)
+inline void CONCAT(freeVec_, SIMD_ENGINE)(bool *&constantsAreInitialized, bool *&initialized, INT_TYPE *&prev_hap_bases_lengths)
 {
     _mm_free(constantsAreInitialized);
     _mm_free(initialized);
     _mm_free(prev_hap_bases_lengths);
 }
 
-inline void initializeVec(double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, bool &constantsAreInitialized, bool &initialized, const int32_t maxHaplotypeLength)
+inline void CONCAT(initializeVec_, SIMD_ENGINE)(double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, bool &constantsAreInitialized, bool &initialized, const int32_t maxHaplotypeLength)
 {
     const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
     size_t sizeOfTables = paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE * sizeof(double);
@@ -122,19 +53,19 @@ inline void initializeVec(double *matchMatrixVec, double *insertionMatrixVec, do
     initialized = true;
 }
 
-inline VEC_DOUBLE_TYPE qualToErrorProb(VEC_INT_TYPE qual, const double *qualToErrorProbCache)
+inline VEC_DOUBLE_TYPE CONCAT(qualToErrorProb_, SIMD_ENGINE)(VEC_INT_TYPE qual, const double *qualToErrorProbCache)
 {
     VEC_INT_TYPE vindex = VEC_AND_INT(qual, VEC_SET1_INT(0xff));
     VEC_DOUBLE_TYPE result = VEC_GATHER_PD(vindex, qualToErrorProbCache, 8);
     return result;
 }
 
-inline VEC_DOUBLE_TYPE qualToProb(VEC_INT_TYPE qual, const double *qualToErrorProbCache)
+inline VEC_DOUBLE_TYPE CONCAT(qualToProb_, SIMD_ENGINE)(VEC_INT_TYPE qual, const double *qualToErrorProbCache)
 {
-    return VEC_SUB_PD(VEC_SET1_PD(1), qualToErrorProb(qual, qualToErrorProbCache));
+    return VEC_SUB_PD(VEC_SET1_PD(1), CONCAT(qualToErrorProb_, SIMD_ENGINE)(qual, qualToErrorProbCache));
 }
 
-inline VEC_DOUBLE_TYPE matchToMatchProbFun(VEC_INT_TYPE insQual, VEC_INT_TYPE delQual, const double *matchToMatchProb, int32_t &status)
+inline VEC_DOUBLE_TYPE CONCAT(matchToMatchProbFun_, SIMD_ENGINE)(VEC_INT_TYPE insQual, VEC_INT_TYPE delQual, const double *matchToMatchProb, int32_t &status)
 {
     insQual = VEC_AND_INT(insQual, VEC_SET1_INT(0xff));
     delQual = VEC_AND_INT(delQual, VEC_SET1_INT(0xff));
@@ -199,7 +130,7 @@ inline VEC_DOUBLE_TYPE matchToMatchProbFun(VEC_INT_TYPE insQual, VEC_INT_TYPE de
     }
 }
 
-inline int32_t qualToTransProbs(double *dest, VEC_INT_TYPE insQual, VEC_INT_TYPE delQual, VEC_INT_TYPE gcp, const double *matchToMatchProb, const double *qualToErrorProbCache)
+inline int32_t CONCAT(qualToTransProbs_, SIMD_ENGINE)(double *dest, VEC_INT_TYPE insQual, VEC_INT_TYPE delQual, VEC_INT_TYPE gcp, const double *matchToMatchProb, const double *qualToErrorProbCache)
 {
     VEC_INT_TYPE zeroVec = VEC_SET0_INT();
 
@@ -219,30 +150,30 @@ inline int32_t qualToTransProbs(double *dest, VEC_INT_TYPE insQual, VEC_INT_TYPE
         return PDHMM_INPUT_DATA_ERROR;
     }
     int32_t status = PDHMM_SUCCESS;
-    VEC_DOUBLE_TYPE result = matchToMatchProbFun(insQual, delQual, matchToMatchProb, status);
+    VEC_DOUBLE_TYPE result = CONCAT(matchToMatchProbFun_, SIMD_ENGINE)(insQual, delQual, matchToMatchProb, status);
     if (status != PDHMM_SUCCESS)
     {
         return status;
     }
     VEC_STORE_PD(dest + matchToMatch * SIMD_WIDTH_DOUBLE, result);
 
-    result = qualToErrorProb(insQual, qualToErrorProbCache);
+    result = CONCAT(qualToErrorProb_, SIMD_ENGINE)(insQual, qualToErrorProbCache);
     VEC_STORE_PD(dest + matchToInsertion * SIMD_WIDTH_DOUBLE, result);
 
-    result = qualToErrorProb(delQual, qualToErrorProbCache);
+    result = CONCAT(qualToErrorProb_, SIMD_ENGINE)(delQual, qualToErrorProbCache);
     VEC_STORE_PD(dest + matchToDeletion * SIMD_WIDTH_DOUBLE, result);
 
-    result = qualToProb(gcp, qualToErrorProbCache);
+    result = CONCAT(qualToProb_, SIMD_ENGINE)(gcp, qualToErrorProbCache);
     VEC_STORE_PD(dest + indelToMatch * SIMD_WIDTH_DOUBLE, result);
 
-    result = qualToErrorProb(gcp, qualToErrorProbCache);
+    result = CONCAT(qualToErrorProb_, SIMD_ENGINE)(gcp, qualToErrorProbCache);
     VEC_STORE_PD(dest + insertionToInsertion * SIMD_WIDTH_DOUBLE, result);
     VEC_STORE_PD(dest + deletionToDeletion * SIMD_WIDTH_DOUBLE, result);
 
     return PDHMM_SUCCESS;
 }
 
-inline int32_t qualToTransProbsVec(double *dest, const INT_TYPE *insQuals, const INT_TYPE *delQuals, const INT_TYPE *gcps, INT_TYPE max_read_bases_length, const double *matchToMatchProb, const double *qualToErrorProbCache, const INT_TYPE qual_size, const INT_TYPE transitionVecSize)
+inline int32_t CONCAT(qualToTransProbsVec_, SIMD_ENGINE)(double *dest, const INT_TYPE *insQuals, const INT_TYPE *delQuals, const INT_TYPE *gcps, INT_TYPE max_read_bases_length, const double *matchToMatchProb, const double *qualToErrorProbCache, const INT_TYPE qual_size, const INT_TYPE transitionVecSize)
 {
     INT_TYPE index, offset;
     VEC_INT_TYPE insQualsVec, delQualsVec, gcpVec;
@@ -264,7 +195,7 @@ inline int32_t qualToTransProbsVec(double *dest, const INT_TYPE *insQuals, const
         insQualsVec = VEC_LOAD_INT(insQuals + offset);
         delQualsVec = VEC_LOAD_INT(delQuals + offset);
         gcpVec = VEC_LOAD_INT(gcps + offset);
-        int32_t currStatus = qualToTransProbs(dest + index, insQualsVec, delQualsVec, gcpVec, matchToMatchProb, qualToErrorProbCache);
+        int32_t currStatus = CONCAT(qualToTransProbs_, SIMD_ENGINE)(dest + index, insQualsVec, delQualsVec, gcpVec, matchToMatchProb, qualToErrorProbCache);
         if (currStatus != PDHMM_SUCCESS)
         {
             return currStatus;
@@ -273,12 +204,12 @@ inline int32_t qualToTransProbsVec(double *dest, const INT_TYPE *insQuals, const
     return status;
 }
 
-inline int32_t initializeProbabilitiesVec(double *dest, const INT_TYPE *insertionGOP, const INT_TYPE *deletionGOP, const INT_TYPE *overallGCP, INT_TYPE read_bases_length, const double *matchToMatchProb, const double *qualToErrorProbCache, const INT_TYPE qual_size, const INT_TYPE transitionVecSize)
+inline int32_t CONCAT(initializeProbabilitiesVec_, SIMD_ENGINE)(double *dest, const INT_TYPE *insertionGOP, const INT_TYPE *deletionGOP, const INT_TYPE *overallGCP, INT_TYPE read_bases_length, const double *matchToMatchProb, const double *qualToErrorProbCache, const INT_TYPE qual_size, const INT_TYPE transitionVecSize)
 {
-    return qualToTransProbsVec(dest, insertionGOP, deletionGOP, overallGCP, read_bases_length, matchToMatchProb, qualToErrorProbCache, qual_size, transitionVecSize);
+    return CONCAT(qualToTransProbsVec_, SIMD_ENGINE)(dest, insertionGOP, deletionGOP, overallGCP, read_bases_length, matchToMatchProb, qualToErrorProbCache, qual_size, transitionVecSize);
 }
 
-inline VEC_MASK_TYPE isBasePDMatching(VEC_INT_TYPE xPrime, VEC_INT_TYPE hapPDBases)
+inline VEC_MASK_TYPE CONCAT(isBasePDMatching_, SIMD_ENGINE)(VEC_INT_TYPE xPrime, VEC_INT_TYPE hapPDBases, VEC_INT_TYPE SNPVec)
 {
     VEC_INT_TYPE temp = VEC_AND_INT(hapPDBases, SNPVec);
     VEC_INT_TYPE zeroVec = VEC_SET0_INT();
@@ -290,7 +221,7 @@ inline VEC_MASK_TYPE isBasePDMatching(VEC_INT_TYPE xPrime, VEC_INT_TYPE hapPDBas
     return mask2;
 }
 
-inline VEC_INT_TYPE toPrime(VEC_INT_TYPE x)
+inline VEC_INT_TYPE CONCAT(toPrime_, SIMD_ENGINE)(VEC_INT_TYPE x, VEC_INT_TYPE AVec, VEC_INT_TYPE CVec, VEC_INT_TYPE GVec, VEC_INT_TYPE TVec)
 {
     VEC_INT_TYPE result = AVec;
     VEC_MASK_TYPE mask = VEC_CMP_EQ_INT(x, VEC_SET1_INT('C'));
@@ -302,13 +233,19 @@ inline VEC_INT_TYPE toPrime(VEC_INT_TYPE x)
     return result;
 }
 
-inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYPE *haplotypePDBases, const INT_TYPE *readBases, INT_TYPE *readQuals, INT_TYPE startIndex, INT_TYPE currMaxHaplotypeLength, INT_TYPE currMaxReadLength, double *priorVec, const double *qualToErrorProbCache, int32_t maxHaplotypeLength, INT_TYPE readArrayLen, INT_TYPE hapArrayLen, INT_TYPE priorVecLen)
+inline int32_t CONCAT(initializePriorsVec_, SIMD_ENGINE)(const INT_TYPE *haplotypeBases, const INT_TYPE *haplotypePDBases, const INT_TYPE *readBases, INT_TYPE *readQuals, INT_TYPE startIndex, INT_TYPE currMaxHaplotypeLength, INT_TYPE currMaxReadLength, double *priorVec, const double *qualToErrorProbCache, int32_t maxHaplotypeLength, INT_TYPE readArrayLen, INT_TYPE hapArrayLen, INT_TYPE priorVecLen)
 {
     // initialize the prior matrix for all combinations of read x haplotype bases
     INT_TYPE paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
     VEC_INT_TYPE nVec = VEC_SET1_INT((int8_t)'N');
     VEC_INT_TYPE aVec = VEC_SET1_INT('a');
     VEC_INT_TYPE caseDiff = VEC_SET1_INT(32);
+
+    VEC_INT_TYPE SNPVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::SNP);
+    VEC_INT_TYPE AVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::A);
+    VEC_INT_TYPE CVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::C);
+    VEC_INT_TYPE GVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::G);
+    VEC_INT_TYPE TVec = VEC_SET1_INT(PartiallyDeterminedHaplotype::T);
 
     if (currMaxReadLength * SIMD_WIDTH_DOUBLE > readArrayLen)
     {
@@ -326,52 +263,52 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
     }
 
     // manual unroll rows
-    INT_TYPE n = roundDownToNearestMultipleOf(currMaxReadLength, ROW_UNROLL);
+    INT_TYPE n = CONCAT(roundDownToNearestMultipleOf_, SIMD_ENGINE)(currMaxReadLength, ROW_UNROLL);
     for (int32_t i = 0; i < n; i += ROW_UNROLL)
     {
         INT_TYPE index = i * SIMD_WIDTH_DOUBLE;
         VEC_INT_TYPE x1 = VEC_LOAD_INT(readBases + index);
         VEC_INT_TYPE qual = VEC_LOAD_INT(readQuals + index);
-        VEC_DOUBLE_TYPE trueVal1 = qualToProb(qual, qualToErrorProbCache);
-        VEC_DOUBLE_TYPE falseVal1 = VEC_DIV_PD(qualToErrorProb(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
+        VEC_DOUBLE_TYPE trueVal1 = CONCAT(qualToProb_, SIMD_ENGINE)(qual, qualToErrorProbCache);
+        VEC_DOUBLE_TYPE falseVal1 = VEC_DIV_PD(CONCAT(qualToErrorProb_, SIMD_ENGINE)(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
         VEC_MASK_TYPE maskx1 = VEC_CMP_EQ_INT(x1, nVec);
         VEC_MASK_TYPE isLower = VEC_CMP_LE_INT(aVec, x1);
         VEC_INT_TYPE x1Prime = VEC_SUB_INT(x1, caseDiff);
         x1Prime = VEC_BLEND_INT(x1, x1Prime, isLower);
-        x1Prime = toPrime(x1Prime);
+        x1Prime = CONCAT(toPrime_, SIMD_ENGINE)(x1Prime, AVec, CVec, GVec, TVec);
 
         index = (i + 1) * SIMD_WIDTH_DOUBLE;
         VEC_INT_TYPE x2 = VEC_LOAD_INT(readBases + index);
         qual = VEC_LOAD_INT(readQuals + index);
-        VEC_DOUBLE_TYPE trueVal2 = qualToProb(qual, qualToErrorProbCache);
-        VEC_DOUBLE_TYPE falseVal2 = VEC_DIV_PD(qualToErrorProb(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
+        VEC_DOUBLE_TYPE trueVal2 = CONCAT(qualToProb_, SIMD_ENGINE)(qual, qualToErrorProbCache);
+        VEC_DOUBLE_TYPE falseVal2 = VEC_DIV_PD(CONCAT(qualToErrorProb_, SIMD_ENGINE)(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
         VEC_MASK_TYPE maskx2 = VEC_CMP_EQ_INT(x2, nVec);
         isLower = VEC_CMP_LE_INT(aVec, x2);
         VEC_INT_TYPE x2Prime = VEC_SUB_INT(x2, caseDiff);
         x2Prime = VEC_BLEND_INT(x2, x2Prime, isLower);
-        x2Prime = toPrime(x2Prime);
+        x2Prime = CONCAT(toPrime_, SIMD_ENGINE)(x2Prime, AVec, CVec, GVec, TVec);
 
         index = (i + 2) * SIMD_WIDTH_DOUBLE;
         VEC_INT_TYPE x3 = VEC_LOAD_INT(readBases + index);
         qual = VEC_LOAD_INT(readQuals + index);
-        VEC_DOUBLE_TYPE trueVal3 = qualToProb(qual, qualToErrorProbCache);
-        VEC_DOUBLE_TYPE falseVal3 = VEC_DIV_PD(qualToErrorProb(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
+        VEC_DOUBLE_TYPE trueVal3 = CONCAT(qualToProb_, SIMD_ENGINE)(qual, qualToErrorProbCache);
+        VEC_DOUBLE_TYPE falseVal3 = VEC_DIV_PD(CONCAT(qualToErrorProb_, SIMD_ENGINE)(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
         VEC_MASK_TYPE maskx3 = VEC_CMP_EQ_INT(x3, nVec);
         isLower = VEC_CMP_LE_INT(aVec, x3);
         VEC_INT_TYPE x3Prime = VEC_SUB_INT(x3, caseDiff);
         x3Prime = VEC_BLEND_INT(x3, x3Prime, isLower);
-        x3Prime = toPrime(x3Prime);
+        x3Prime = CONCAT(toPrime_, SIMD_ENGINE)(x3Prime, AVec, CVec, GVec, TVec);
 
         index = (i + 3) * SIMD_WIDTH_DOUBLE;
         VEC_INT_TYPE x4 = VEC_LOAD_INT(readBases + index);
         qual = VEC_LOAD_INT(readQuals + index);
-        VEC_DOUBLE_TYPE trueVal4 = qualToProb(qual, qualToErrorProbCache);
-        VEC_DOUBLE_TYPE falseVal4 = VEC_DIV_PD(qualToErrorProb(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
+        VEC_DOUBLE_TYPE trueVal4 = CONCAT(qualToProb_, SIMD_ENGINE)(qual, qualToErrorProbCache);
+        VEC_DOUBLE_TYPE falseVal4 = VEC_DIV_PD(CONCAT(qualToErrorProb_, SIMD_ENGINE)(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
         VEC_MASK_TYPE maskx4 = VEC_CMP_EQ_INT(x4, nVec);
         isLower = VEC_CMP_LE_INT(aVec, x4);
         VEC_INT_TYPE x4Prime = VEC_SUB_INT(x4, caseDiff);
         x4Prime = VEC_BLEND_INT(x4, x4Prime, isLower);
-        x4Prime = toPrime(x4Prime);
+        x4Prime = CONCAT(toPrime_, SIMD_ENGINE)(x4Prime, AVec, CVec, GVec, TVec);
 
         for (INT_TYPE j = startIndex; j < currMaxHaplotypeLength; j++)
         {
@@ -383,7 +320,7 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
             VEC_MASK_TYPE mask1 = VEC_CMP_EQ_INT(x1, y);
             mask1 = VEC_OR_MASK(mask1, maskx1);
             mask1 = VEC_OR_MASK(mask1, maskY);
-            mask1 = VEC_OR_MASK(mask1, isBasePDMatching(x1Prime, hapPDBase));
+            mask1 = VEC_OR_MASK(mask1, CONCAT(isBasePDMatching_, SIMD_ENGINE)(x1Prime, hapPDBase, SNPVec));
             VEC_DOUBLE_TYPE priorValue = VEC_BLEND_PD(falseVal1, trueVal1, mask1);
             index = (i + 1) * paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE + (j + 1) * SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(priorVec + index, priorValue);
@@ -391,7 +328,7 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
             mask1 = VEC_CMP_EQ_INT(x2, y);
             mask1 = VEC_OR_MASK(mask1, maskx2);
             mask1 = VEC_OR_MASK(mask1, maskY);
-            mask1 = VEC_OR_MASK(mask1, isBasePDMatching(x2Prime, hapPDBase));
+            mask1 = VEC_OR_MASK(mask1, CONCAT(isBasePDMatching_, SIMD_ENGINE)(x2Prime, hapPDBase, SNPVec));
             priorValue = VEC_BLEND_PD(falseVal2, trueVal2, mask1);
             index = (i + 2) * paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE + (j + 1) * SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(priorVec + index, priorValue);
@@ -399,7 +336,7 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
             mask1 = VEC_CMP_EQ_INT(x3, y);
             mask1 = VEC_OR_MASK(mask1, maskx3);
             mask1 = VEC_OR_MASK(mask1, maskY);
-            mask1 = VEC_OR_MASK(mask1, isBasePDMatching(x3Prime, hapPDBase));
+            mask1 = VEC_OR_MASK(mask1, CONCAT(isBasePDMatching_, SIMD_ENGINE)(x3Prime, hapPDBase, SNPVec));
             priorValue = VEC_BLEND_PD(falseVal3, trueVal3, mask1);
             index = (i + 3) * paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE + (j + 1) * SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(priorVec + index, priorValue);
@@ -407,7 +344,7 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
             mask1 = VEC_CMP_EQ_INT(x4, y);
             mask1 = VEC_OR_MASK(mask1, maskx4);
             mask1 = VEC_OR_MASK(mask1, maskY);
-            mask1 = VEC_OR_MASK(mask1, isBasePDMatching(x4Prime, hapPDBase));
+            mask1 = VEC_OR_MASK(mask1, CONCAT(isBasePDMatching_, SIMD_ENGINE)(x4Prime, hapPDBase, SNPVec));
             priorValue = VEC_BLEND_PD(falseVal4, trueVal4, mask1);
             index = (i + 4) * paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE + (j + 1) * SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(priorVec + index, priorValue);
@@ -419,13 +356,13 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
         INT_TYPE index = i * SIMD_WIDTH_DOUBLE;
         VEC_INT_TYPE x1 = VEC_LOAD_INT(readBases + index);
         VEC_INT_TYPE qual = VEC_LOAD_INT(readQuals + index);
-        VEC_DOUBLE_TYPE trueVal1 = qualToProb(qual, qualToErrorProbCache);
-        VEC_DOUBLE_TYPE falseVal1 = VEC_DIV_PD(qualToErrorProb(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
+        VEC_DOUBLE_TYPE trueVal1 = CONCAT(qualToProb_, SIMD_ENGINE)(qual, qualToErrorProbCache);
+        VEC_DOUBLE_TYPE falseVal1 = VEC_DIV_PD(CONCAT(qualToErrorProb_, SIMD_ENGINE)(qual, qualToErrorProbCache), VEC_SET1_PD(3.0));
         VEC_MASK_TYPE maskx1 = VEC_CMP_EQ_INT(x1, nVec);
         VEC_MASK_TYPE isLower = VEC_CMP_LE_INT(aVec, x1);
         VEC_INT_TYPE x1Prime = VEC_SUB_INT(x1, caseDiff);
         x1Prime = VEC_BLEND_INT(x1, x1Prime, isLower);
-        x1Prime = toPrime(x1Prime);
+        x1Prime = CONCAT(toPrime_, SIMD_ENGINE)(x1Prime, AVec, CVec, GVec, TVec);
         for (INT_TYPE j = startIndex; j < currMaxHaplotypeLength; j++)
         {
             index = j * SIMD_WIDTH_DOUBLE;
@@ -435,7 +372,7 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
             VEC_MASK_TYPE mask1 = VEC_CMP_EQ_INT(x1, y);
             mask1 = VEC_OR_MASK(mask1, maskx1);
             mask1 = VEC_OR_MASK(mask1, VEC_CMP_EQ_INT(y, nVec));
-            mask1 = VEC_OR_MASK(mask1, isBasePDMatching(x1Prime, hapPDBase));
+            mask1 = VEC_OR_MASK(mask1, CONCAT(isBasePDMatching_, SIMD_ENGINE)(x1Prime, hapPDBase, SNPVec));
             VEC_DOUBLE_TYPE priorValue = VEC_BLEND_PD(falseVal1, trueVal1, mask1);
             index = (i + 1) * paddedMaxHaplotypeLength * SIMD_WIDTH_DOUBLE + (j + 1) * SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(priorVec + index, priorValue);
@@ -444,16 +381,16 @@ inline int32_t initializePriorsVec(const INT_TYPE *haplotypeBases, const INT_TYP
     return PDHMM_SUCCESS;
 }
 
-inline void recursionFunction(VEC_DOUBLE_TYPE mm_diag, VEC_DOUBLE_TYPE mm_top, VEC_DOUBLE_TYPE mm_left, VEC_DOUBLE_TYPE &mm_curr,
-                              VEC_DOUBLE_TYPE im_diag, VEC_DOUBLE_TYPE im_top, VEC_DOUBLE_TYPE im_left, VEC_DOUBLE_TYPE &im_curr,
-                              VEC_DOUBLE_TYPE dm_diag, VEC_DOUBLE_TYPE dm_top, VEC_DOUBLE_TYPE dm_left, VEC_DOUBLE_TYPE &dm_curr,
-                              VEC_DOUBLE_TYPE bmm_diag, VEC_DOUBLE_TYPE bmm_top, VEC_DOUBLE_TYPE bmm_left, VEC_DOUBLE_TYPE &bmm_curr,
-                              VEC_DOUBLE_TYPE bim_diag, VEC_DOUBLE_TYPE bim_top, VEC_DOUBLE_TYPE bim_left, VEC_DOUBLE_TYPE &bim_curr,
-                              VEC_DOUBLE_TYPE bdm_diag, VEC_DOUBLE_TYPE bdm_top, VEC_DOUBLE_TYPE bdm_left, VEC_DOUBLE_TYPE &bdm_curr,
-                              VEC_DOUBLE_TYPE tmm, VEC_DOUBLE_TYPE tim, VEC_DOUBLE_TYPE tmi, VEC_DOUBLE_TYPE tii, VEC_DOUBLE_TYPE tmd, VEC_DOUBLE_TYPE tdd,
-                              VEC_INT_TYPE del_start, VEC_INT_TYPE del_end, VEC_INT_TYPE normalState, VEC_INT_TYPE insideState,
-                              VEC_INT_TYPE afterState, VEC_INT_TYPE &currentState, VEC_MASK_TYPE rowWrite, const INT_TYPE *hap_pdbases_vec,
-                              INT_TYPE i, INT_TYPE j, INT_TYPE paddedMaxHaplotypeLength, const double *priorVec)
+inline void CONCAT(recursionFunction_, SIMD_ENGINE)(VEC_DOUBLE_TYPE mm_diag, VEC_DOUBLE_TYPE mm_top, VEC_DOUBLE_TYPE mm_left, VEC_DOUBLE_TYPE &mm_curr,
+                                                    VEC_DOUBLE_TYPE im_diag, VEC_DOUBLE_TYPE im_top, VEC_DOUBLE_TYPE im_left, VEC_DOUBLE_TYPE &im_curr,
+                                                    VEC_DOUBLE_TYPE dm_diag, VEC_DOUBLE_TYPE dm_top, VEC_DOUBLE_TYPE dm_left, VEC_DOUBLE_TYPE &dm_curr,
+                                                    VEC_DOUBLE_TYPE bmm_diag, VEC_DOUBLE_TYPE bmm_top, VEC_DOUBLE_TYPE bmm_left, VEC_DOUBLE_TYPE &bmm_curr,
+                                                    VEC_DOUBLE_TYPE bim_diag, VEC_DOUBLE_TYPE bim_top, VEC_DOUBLE_TYPE bim_left, VEC_DOUBLE_TYPE &bim_curr,
+                                                    VEC_DOUBLE_TYPE bdm_diag, VEC_DOUBLE_TYPE bdm_top, VEC_DOUBLE_TYPE bdm_left, VEC_DOUBLE_TYPE &bdm_curr,
+                                                    VEC_DOUBLE_TYPE tmm, VEC_DOUBLE_TYPE tim, VEC_DOUBLE_TYPE tmi, VEC_DOUBLE_TYPE tii, VEC_DOUBLE_TYPE tmd, VEC_DOUBLE_TYPE tdd,
+                                                    VEC_INT_TYPE del_start, VEC_INT_TYPE del_end, VEC_INT_TYPE normalState, VEC_INT_TYPE insideState,
+                                                    VEC_INT_TYPE afterState, VEC_INT_TYPE &currentState, VEC_MASK_TYPE rowWrite, const INT_TYPE *hap_pdbases_vec,
+                                                    INT_TYPE i, INT_TYPE j, INT_TYPE paddedMaxHaplotypeLength, const double *priorVec)
 {
     VEC_MASK_TYPE maskInside = VEC_CMP_EQ_INT(currentState, insideState);
     VEC_MASK_TYPE maskAfter = VEC_CMP_EQ_INT(currentState, afterState);
@@ -528,7 +465,7 @@ inline void recursionFunction(VEC_DOUBLE_TYPE mm_diag, VEC_DOUBLE_TYPE mm_top, V
     dm_curr = VEC_BLEND_PD(dm_top, dm_curr, rowWrite);
 }
 
-inline int32_t computationStep(const INT_TYPE *paddedReadLengths, const INT_TYPE *hap_pdbases_vec, INT_TYPE currMaxPaddedHaplotypeLength, INT_TYPE currMaxPaddedReadLength, const INT_TYPE *paddedHaplotypeLength, double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, const double *transitionVec, const double *priorVec, double *result, int32_t maxHaplotypeLength, INT_TYPE transitionVecSize, INT_TYPE matrixVecSize, INT_TYPE hapVecLen, INT_TYPE priorVecLen)
+inline int32_t CONCAT(computationStep_, SIMD_ENGINE)(const INT_TYPE *paddedReadLengths, const INT_TYPE *hap_pdbases_vec, INT_TYPE currMaxPaddedHaplotypeLength, INT_TYPE currMaxPaddedReadLength, const INT_TYPE *paddedHaplotypeLength, double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, const double *transitionVec, const double *priorVec, double *result, int32_t maxHaplotypeLength, INT_TYPE transitionVecSize, INT_TYPE matrixVecSize, INT_TYPE hapVecLen, INT_TYPE priorVecLen)
 {
     INT_TYPE paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
     VEC_INT_TYPE currentState1 = VEC_SET1_INT(NORMAL);
@@ -703,49 +640,49 @@ inline int32_t computationStep(const INT_TYPE *paddedReadLengths, const INT_TYPE
 
             bdm_1 = VEC_LOAD_PD(branchDeletionMatrixVec + topIndex);
 
-            recursionFunction(mm_0, mm_1, mm_2, mm_3,
-                              im_0, im_1, im_2, im_3,
-                              dm_0, dm_1, dm_2, dm_3,
-                              bmm_0, bmm_1, bmm_2, bmm_3,
-                              bim_0, bim_1, bim_2, bim_3,
-                              bdm_0, bdm_1, bdm_2, bdm_3,
-                              tmm1, tim1, tmi1, tii1, tmd1, tdd1,
-                              del_start, del_end, normalState, insideState,
-                              afterState, currentState1, rowWrite1, hap_pdbases_vec,
-                              i, j, paddedMaxHaplotypeLength, priorVec);
+            CONCAT(recursionFunction_, SIMD_ENGINE)(mm_0, mm_1, mm_2, mm_3,
+                                                    im_0, im_1, im_2, im_3,
+                                                    dm_0, dm_1, dm_2, dm_3,
+                                                    bmm_0, bmm_1, bmm_2, bmm_3,
+                                                    bim_0, bim_1, bim_2, bim_3,
+                                                    bdm_0, bdm_1, bdm_2, bdm_3,
+                                                    tmm1, tim1, tmi1, tii1, tmd1, tdd1,
+                                                    del_start, del_end, normalState, insideState,
+                                                    afterState, currentState1, rowWrite1, hap_pdbases_vec,
+                                                    i, j, paddedMaxHaplotypeLength, priorVec);
 
-            recursionFunction(mm_2, mm_3, mm_4, mm_5,
-                              im_2, im_3, im_4, im_5,
-                              dm_2, dm_3, dm_4, dm_5,
-                              bmm_2, bmm_3, bmm_4, bmm_5,
-                              bim_2, bim_3, bim_4, bim_5,
-                              bdm_2, bdm_3, bdm_4, bdm_5,
-                              tmm2, tim2, tmi2, tii2, tmd2, tdd2,
-                              del_start, del_end, normalState, insideState,
-                              afterState, currentState2, rowWrite2, hap_pdbases_vec,
-                              i + 1, j, paddedMaxHaplotypeLength, priorVec);
+            CONCAT(recursionFunction_, SIMD_ENGINE)(mm_2, mm_3, mm_4, mm_5,
+                                                    im_2, im_3, im_4, im_5,
+                                                    dm_2, dm_3, dm_4, dm_5,
+                                                    bmm_2, bmm_3, bmm_4, bmm_5,
+                                                    bim_2, bim_3, bim_4, bim_5,
+                                                    bdm_2, bdm_3, bdm_4, bdm_5,
+                                                    tmm2, tim2, tmi2, tii2, tmd2, tdd2,
+                                                    del_start, del_end, normalState, insideState,
+                                                    afterState, currentState2, rowWrite2, hap_pdbases_vec,
+                                                    i + 1, j, paddedMaxHaplotypeLength, priorVec);
 
-            recursionFunction(mm_4, mm_5, mm_6, mm_7,
-                              im_4, im_5, im_6, im_7,
-                              dm_4, dm_5, dm_6, dm_7,
-                              bmm_4, bmm_5, bmm_6, bmm_7,
-                              bim_4, bim_5, bim_6, bim_7,
-                              bdm_4, bdm_5, bdm_6, bdm_7,
-                              tmm3, tim3, tmi3, tii3, tmd3, tdd3,
-                              del_start, del_end, normalState, insideState,
-                              afterState, currentState3, rowWrite3, hap_pdbases_vec,
-                              i + 2, j, paddedMaxHaplotypeLength, priorVec);
+            CONCAT(recursionFunction_, SIMD_ENGINE)(mm_4, mm_5, mm_6, mm_7,
+                                                    im_4, im_5, im_6, im_7,
+                                                    dm_4, dm_5, dm_6, dm_7,
+                                                    bmm_4, bmm_5, bmm_6, bmm_7,
+                                                    bim_4, bim_5, bim_6, bim_7,
+                                                    bdm_4, bdm_5, bdm_6, bdm_7,
+                                                    tmm3, tim3, tmi3, tii3, tmd3, tdd3,
+                                                    del_start, del_end, normalState, insideState,
+                                                    afterState, currentState3, rowWrite3, hap_pdbases_vec,
+                                                    i + 2, j, paddedMaxHaplotypeLength, priorVec);
 
-            recursionFunction(mm_6, mm_7, mm_8, mm_9,
-                              im_6, im_7, im_8, im_9,
-                              dm_6, dm_7, dm_8, dm_9,
-                              bmm_6, bmm_7, bmm_8, bmm_9,
-                              bim_6, bim_7, bim_8, bim_9,
-                              bdm_6, bdm_7, bdm_8, bdm_9,
-                              tmm4, tim4, tmi4, tii4, tmd4, tdd4,
-                              del_start, del_end, normalState, insideState,
-                              afterState, currentState4, rowWrite4, hap_pdbases_vec,
-                              i + 3, j, paddedMaxHaplotypeLength, priorVec);
+            CONCAT(recursionFunction_, SIMD_ENGINE)(mm_6, mm_7, mm_8, mm_9,
+                                                    im_6, im_7, im_8, im_9,
+                                                    dm_6, dm_7, dm_8, dm_9,
+                                                    bmm_6, bmm_7, bmm_8, bmm_9,
+                                                    bim_6, bim_7, bim_8, bim_9,
+                                                    bdm_6, bdm_7, bdm_8, bdm_9,
+                                                    tmm4, tim4, tmi4, tii4, tmd4, tdd4,
+                                                    del_start, del_end, normalState, insideState,
+                                                    afterState, currentState4, rowWrite4, hap_pdbases_vec,
+                                                    i + 3, j, paddedMaxHaplotypeLength, priorVec);
 
             INT_TYPE currIndex = (j)*SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(branchMatchMatrixVec + currIndex, bmm_9);
@@ -858,16 +795,16 @@ inline int32_t computationStep(const INT_TYPE *paddedReadLengths, const INT_TYPE
 
             bdm_1 = VEC_LOAD_PD(branchDeletionMatrixVec + topIndex);
 
-            recursionFunction(mm_0, mm_1, mm_2, mm_3,
-                              im_0, im_1, im_2, im_3,
-                              dm_0, dm_1, dm_2, dm_3,
-                              bmm_0, bmm_1, bmm_2, bmm_3,
-                              bim_0, bim_1, bim_2, bim_3,
-                              bdm_0, bdm_1, bdm_2, bdm_3,
-                              tmm1, tim1, tmi1, tii1, tmd1, tdd1,
-                              del_start, del_end, normalState, insideState,
-                              afterState, currentState1, rowWrite1, hap_pdbases_vec,
-                              i, j, paddedMaxHaplotypeLength, priorVec);
+            CONCAT(recursionFunction_, SIMD_ENGINE)(mm_0, mm_1, mm_2, mm_3,
+                                                    im_0, im_1, im_2, im_3,
+                                                    dm_0, dm_1, dm_2, dm_3,
+                                                    bmm_0, bmm_1, bmm_2, bmm_3,
+                                                    bim_0, bim_1, bim_2, bim_3,
+                                                    bdm_0, bdm_1, bdm_2, bdm_3,
+                                                    tmm1, tim1, tmi1, tii1, tmd1, tdd1,
+                                                    del_start, del_end, normalState, insideState,
+                                                    afterState, currentState1, rowWrite1, hap_pdbases_vec,
+                                                    i, j, paddedMaxHaplotypeLength, priorVec);
 
             INT_TYPE currIndex = (j)*SIMD_WIDTH_DOUBLE;
             VEC_STORE_PD(branchMatchMatrixVec + currIndex, bmm_3);
@@ -914,7 +851,7 @@ inline int32_t computationStep(const INT_TYPE *paddedReadLengths, const INT_TYPE
     return PDHMM_SUCCESS;
 }
 
-int32_t initializeStep1(const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, const INT_TYPE *hap_bases_length, const INT_TYPE *read_bases_length, const INT_TYPE *prev_hap_bases_length, const INT_TYPE *paddedHaplotypeLengths, const INT_TYPE *paddedReadLengths, INT_TYPE &currMaxPaddedHaplotypeLength, INT_TYPE &currMaxPaddedReadLength, double *transitionVec, double *deletionMatrixVec, const double *matchToMatchProb, const double *qualToErrorProbCache, int32_t maxReadLength, int32_t maxHapLength)
+int32_t CONCAT(initializeStep1_, SIMD_ENGINE)(const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, const INT_TYPE *hap_bases_length, const INT_TYPE *read_bases_length, const INT_TYPE *prev_hap_bases_length, const INT_TYPE *paddedHaplotypeLengths, const INT_TYPE *paddedReadLengths, INT_TYPE &currMaxPaddedHaplotypeLength, INT_TYPE &currMaxPaddedReadLength, double *transitionVec, double *deletionMatrixVec, const double *matchToMatchProb, const double *qualToErrorProbCache, int32_t maxReadLength, int32_t maxHapLength)
 {
     // Step 1 - Obtain max read and haplotype length
     currMaxPaddedHaplotypeLength = paddedHaplotypeLengths[0];
@@ -1007,7 +944,7 @@ int32_t initializeStep1(const int8_t *read_ins_qual, const int8_t *read_del_qual
     INT_TYPE qual_size = maxReadLength * SIMD_WIDTH_DOUBLE;
     INT_TYPE transition_vec_size = TRANS_PROB_ARRAY_LENGTH * (maxReadLength + 1) * SIMD_WIDTH_DOUBLE;
 
-    int32_t status = initializeProbabilitiesVec(transitionVec, read_ins_qual_vec, read_del_qual_vec, gcp_vec, currMaxReadLength, matchToMatchProb, qualToErrorProbCache, qual_size, transition_vec_size);
+    int32_t status = CONCAT(initializeProbabilitiesVec_, SIMD_ENGINE)(transitionVec, read_ins_qual_vec, read_del_qual_vec, gcp_vec, currMaxReadLength, matchToMatchProb, qualToErrorProbCache, qual_size, transition_vec_size);
 
     _mm_free(read_ins_qual_vec);
     _mm_free(read_del_qual_vec);
@@ -1015,7 +952,7 @@ int32_t initializeStep1(const int8_t *read_ins_qual, const int8_t *read_del_qual
     return status;
 }
 
-int32_t initializeStep2(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const INT_TYPE *hap_bases_length, const INT_TYPE *read_bases_length, INT_TYPE *&hap_pdbases_vec, INT_TYPE currMaxPaddedHaplotypeLength, INT_TYPE currMaxPaddedReadLength, bool &constantsAreInitialized, double *priorVec, const double *qualToErrorProbCache, int32_t maxReadLength, int32_t maxHaplotypeLength)
+int32_t CONCAT(initializeStep2_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const INT_TYPE *hap_bases_length, const INT_TYPE *read_bases_length, INT_TYPE *&hap_pdbases_vec, INT_TYPE currMaxPaddedHaplotypeLength, INT_TYPE currMaxPaddedReadLength, bool &constantsAreInitialized, double *priorVec, const double *qualToErrorProbCache, int32_t maxReadLength, int32_t maxHaplotypeLength)
 {
     INT_TYPE *hap_bases_vec = (INT_TYPE *)_mm_malloc(maxHaplotypeLength * SIMD_WIDTH_DOUBLE * sizeof(INT_TYPE), ALIGN_SIZE);
     hap_pdbases_vec = (INT_TYPE *)_mm_malloc(maxHaplotypeLength * SIMD_WIDTH_DOUBLE * sizeof(INT_TYPE), ALIGN_SIZE);
@@ -1103,7 +1040,7 @@ int32_t initializeStep2(const int8_t *hap_bases, const int8_t *hap_pdbases, cons
         }
     }
 
-    int32_t status = initializePriorsVec(hap_bases_vec, hap_pdbases_vec, read_bases_vec, read_qual_vec, 0, currMaxPaddedHaplotypeLength - 1, currMaxPaddedReadLength - 1, priorVec, qualToErrorProbCache, maxHaplotypeLength, readArrayLen, hapArrayLen, priorVecLen);
+    int32_t status = CONCAT(initializePriorsVec_, SIMD_ENGINE)(hap_bases_vec, hap_pdbases_vec, read_bases_vec, read_qual_vec, 0, currMaxPaddedHaplotypeLength - 1, currMaxPaddedReadLength - 1, priorVec, qualToErrorProbCache, maxHaplotypeLength, readArrayLen, hapArrayLen, priorVecLen);
 
     constantsAreInitialized = true;
 
@@ -1113,7 +1050,7 @@ int32_t initializeStep2(const int8_t *hap_bases, const int8_t *hap_pdbases, cons
     return status;
 }
 
-int32_t computeReadLikelihoodGivenHaplotypeLog10Vec(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, const INT_TYPE *hap_bases_lengths, const INT_TYPE *read_bases_lengths, double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, double *transitionVec, double *priorVec, bool &constantsAreInitialized, INT_TYPE *prev_hap_bases_lengths, double *result, const double *matchToMatchProb, const double *qualToErrorProbCache, int32_t maxReadLength, int32_t maxHaplotypeLength)
+int32_t CONCAT(computeReadLikelihoodGivenHaplotypeLog10Vec_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t *hap_pdbases, const int8_t *read_bases, const int8_t *read_qual, const int8_t *read_ins_qual, const int8_t *read_del_qual, const int8_t *gcp, const INT_TYPE *hap_bases_lengths, const INT_TYPE *read_bases_lengths, double *matchMatrixVec, double *insertionMatrixVec, double *deletionMatrixVec, double *branchMatchMatrixVec, double *branchInsertionMatrixVec, double *branchDeletionMatrixVec, double *transitionVec, double *priorVec, bool &constantsAreInitialized, INT_TYPE *prev_hap_bases_lengths, double *result, const double *matchToMatchProb, const double *qualToErrorProbCache, int32_t maxReadLength, int32_t maxHaplotypeLength)
 {
     bool *recacheReadValues;
     recacheReadValues = (bool *)_mm_malloc(SIMD_WIDTH_DOUBLE * sizeof(bool), ALIGN_SIZE);
@@ -1144,7 +1081,7 @@ int32_t computeReadLikelihoodGivenHaplotypeLog10Vec(const int8_t *hap_bases, con
 
     INT_TYPE *hap_pdbases_vec, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength;
 
-    int32_t status = initializeStep1(read_ins_qual, read_del_qual, gcp, hap_bases_lengths, read_bases_lengths, prev_hap_bases_lengths, paddedHaplotypeLengths, paddedReadLengths, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength, transitionVec, deletionMatrixVec, matchToMatchProb, qualToErrorProbCache, maxReadLength, maxHaplotypeLength);
+    int32_t status = CONCAT(initializeStep1_, SIMD_ENGINE)(read_ins_qual, read_del_qual, gcp, hap_bases_lengths, read_bases_lengths, prev_hap_bases_lengths, paddedHaplotypeLengths, paddedReadLengths, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength, transitionVec, deletionMatrixVec, matchToMatchProb, qualToErrorProbCache, maxReadLength, maxHaplotypeLength);
 
     if (status != PDHMM_SUCCESS)
     {
@@ -1156,7 +1093,7 @@ int32_t computeReadLikelihoodGivenHaplotypeLog10Vec(const int8_t *hap_bases, con
         return status;
     }
 
-    status = initializeStep2(hap_bases, hap_pdbases, read_bases, read_qual, hap_bases_lengths, read_bases_lengths, hap_pdbases_vec, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength, constantsAreInitialized, priorVec, qualToErrorProbCache, maxReadLength, maxHaplotypeLength);
+    status = CONCAT(initializeStep2_, SIMD_ENGINE)(hap_bases, hap_pdbases, read_bases, read_qual, hap_bases_lengths, read_bases_lengths, hap_pdbases_vec, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength, constantsAreInitialized, priorVec, qualToErrorProbCache, maxReadLength, maxHaplotypeLength);
 
     if (status != PDHMM_SUCCESS)
     {
@@ -1173,7 +1110,7 @@ int32_t computeReadLikelihoodGivenHaplotypeLog10Vec(const int8_t *hap_bases, con
     INT_TYPE matrixVecSize = (maxHaplotypeLength + 1) * SIMD_WIDTH_DOUBLE;
     INT_TYPE hapArrayLen = maxHaplotypeLength * SIMD_WIDTH_DOUBLE;
     INT_TYPE priorVecLen = (maxHaplotypeLength + 1) * (maxReadLength + 1) * SIMD_WIDTH_DOUBLE;
-    status = computationStep(paddedReadLengths, hap_pdbases_vec, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength, paddedHaplotypeLengths, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, result, maxHaplotypeLength, transitionVecSize, matrixVecSize, hapArrayLen, priorVecLen);
+    status = CONCAT(computationStep_, SIMD_ENGINE)(paddedReadLengths, hap_pdbases_vec, currMaxPaddedHaplotypeLength, currMaxPaddedReadLength, paddedHaplotypeLengths, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, result, maxHaplotypeLength, transitionVecSize, matrixVecSize, hapArrayLen, priorVecLen);
 
     // Warning: This assumes no downstream modification of the haplotype bases (saves us from copying the array). It is okay for the haplotype caller.
     for (INT_TYPE i = 0; i < SIMD_WIDTH_DOUBLE; i++)
@@ -1237,8 +1174,6 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
     double *qualToErrorProbCache = probCache.getQualToErrorProbCache();
     double *qualToProbLog10Cache = probCache.getQualToProbLog10Cache();
 
-    initVec();
-
     // Allocate memory for tables
     DPTable &dpTable = DPTable::getInstance();
     double *g_matchMatrixVec = dpTable.getMatchMatrix();
@@ -1264,7 +1199,7 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
         _mm_free(hap_bases_lengths);
         _mm_free(read_bases_lengths);
 #endif
-        freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+        CONCAT(freeVec_, SIMD_ENGINE)(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
         _mm_free(status);
 
         return PDHMM_MEMORY_ALLOCATION_FAILED;
@@ -1312,7 +1247,9 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
 #endif
         for (int32_t i = 0; i < roundedBatchSize; i += SIMD_WIDTH_DOUBLE)
         {
-            initializeVec(matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, *constantsAreInitialized, *initialized, maxHaplotypeLength); // array allocation
+            memset(transitionVec, 0, TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * sizeof(double));
+            memset(priorVec, 0, paddedMaxHaplotypeLength * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * sizeof(double));
+            CONCAT(initializeVec_, SIMD_ENGINE)(matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, *constantsAreInitialized, *initialized, maxHaplotypeLength); // array allocation
             for (int32_t j = 0; j < SIMD_WIDTH_DOUBLE; j++)
             {
                 prev_hap_bases_length[j] = -1;
@@ -1321,7 +1258,7 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
             int32_t hapIndexOffset = i * maxHaplotypeLength;
             int32_t readIndexOffset = i * maxReadLength;
 
-            int32_t currStatus = computeReadLikelihoodGivenHaplotypeLog10Vec(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_bases_lengths + i, read_bases_lengths + i, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, *constantsAreInitialized, prev_hap_bases_length, result + i, matchToMatchProb, qualToErrorProbCache, maxReadLength, maxHaplotypeLength);
+            int32_t currStatus = CONCAT(computeReadLikelihoodGivenHaplotypeLog10Vec_, SIMD_ENGINE)(hap_bases + hapIndexOffset, hap_pdbases + hapIndexOffset, read_bases + readIndexOffset, read_qual + readIndexOffset, read_ins_qual + readIndexOffset, read_del_qual + readIndexOffset, gcp + readIndexOffset, hap_bases_lengths + i, read_bases_lengths + i, matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, transitionVec, priorVec, *constantsAreInitialized, prev_hap_bases_length, result + i, matchToMatchProb, qualToErrorProbCache, maxReadLength, maxHaplotypeLength);
 
             if (currStatus != PDHMM_SUCCESS)
                 status[tid] = currStatus;
@@ -1344,7 +1281,7 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
         }
     }
     _mm_free(status);
-    freeVec(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
+    CONCAT(freeVec_, SIMD_ENGINE)(g_constantsAreInitialized, g_initialized, g_prev_hap_bases_lengths);
 
 #if defined(IS_INT32) && IS_INT32
     _mm_free(hap_bases_lengths);

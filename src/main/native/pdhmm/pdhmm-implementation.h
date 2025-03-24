@@ -1,3 +1,26 @@
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2023-2024 Intel Corporation
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 #ifndef PDHMM_IMPLEMENTATION_H
 #define PDHMM_IMPLEMENTATION_H
 
@@ -15,9 +38,17 @@
 
 enum class AVXLevel
 {
+    FASTEST_AVAILABLE,
     SCALAR,
     AVX2,
     AVX512
+};
+
+enum class OpenMPSetting
+{
+    FASTEST_AVAILABLE,
+    ENABLE,
+    DISABLE
 };
 
 class ComputeConfig
@@ -31,11 +62,50 @@ public:
     }
 
     // Initialize the configuration based on system capabilities and user requirements
-    void initialize(int numThreads = 1, AVXLevel userAVXLevel = AVXLevel::AVX512, int maxMemoryInMB = 512)
+    void initialize(OpenMPSetting openMPSetting = OpenMPSetting::FASTEST_AVAILABLE, int numThreads = 1, AVXLevel userAVXLevel = AVXLevel::AVX512, int maxMemoryInMB = 512)
     {
-        this->openMP = (numThreads > 1) && isOpenMPAvailable();
+        // Check OpenMP setting
+        switch (openMPSetting)
+        {
+        case OpenMPSetting::FASTEST_AVAILABLE:
+            this->openMP = numThreads > 1 && isOpenMPAvailable();
+
+            break;
+        case OpenMPSetting::ENABLE:
+            if (!isOpenMPAvailable())
+            {
+                throw JavaException("java/lang/IllegalStateException", "OpenMP is enabled but not available on this system. Please disable OpenMP or run on a system that supports OpenMP.");
+            }
+            this->openMP = true;
+            break;
+        case OpenMPSetting::DISABLE:
+        default:
+            this->openMP = false;
+            numThreads = 1;
+            break;
+        }
+
+        // Check AVX level setting
+        switch (userAVXLevel)
+        {
+        case AVXLevel::FASTEST_AVAILABLE:
+            this->avxLevel = getBestAvailableAVXLevel(userAVXLevel);
+            break;
+        case AVXLevel::AVX512:
+        case AVXLevel::AVX2:
+        case AVXLevel::SCALAR:
+            if (!isArchSupported(userAVXLevel))
+            {
+                throw JavaException("java/lang/IllegalStateException", "Requested AVX level is not available on this system.");
+            }
+            this->avxLevel = userAVXLevel;
+            break;
+        default:
+            this->avxLevel = detectBestAVXLevel();
+            break;
+        }
+
         this->numThreads = this->openMP ? getBestAvailableNumThreads(numThreads) : 1;
-        this->avxLevel = getBestAvailableAVXLevel(userAVXLevel);
         this->maxMemoryInMB = getMaxMemoryAvailable(maxMemoryInMB);
         printConfig();
     }
@@ -57,14 +127,30 @@ private:
     ComputeConfig(const ComputeConfig &) = delete;
     ComputeConfig &operator=(const ComputeConfig &) = delete;
 
+    // Check if the specified AVX level is supported
+    bool isArchSupported(AVXLevel avxLevel)
+    {
+        switch (avxLevel)
+        {
+        case AVXLevel::AVX512:
+            return is_avx512_supported();
+        case AVXLevel::AVX2:
+            return is_avx_supported() && is_avx2_supported() && is_sse_supported();
+        case AVXLevel::SCALAR:
+            return true;
+        default:
+            return false;
+        }
+    }
+
     // Detect the system's best available AVX capabilities
     AVXLevel detectBestAVXLevel()
     {
-        if (is_avx512_supported())
+        if (isArchSupported(AVXLevel::AVX512))
         {
             return AVXLevel::AVX512;
         }
-        else if (is_avx_supported() && is_avx2_supported() && is_sse_supported())
+        else if (isArchSupported(AVXLevel::AVX2))
         {
             return AVXLevel::AVX2;
         }
@@ -77,17 +163,9 @@ private:
     // Get the best available AVX level based on user preference
     AVXLevel getBestAvailableAVXLevel(AVXLevel userAVXLevel)
     {
-        if (userAVXLevel == AVXLevel::SCALAR)
+        if (isArchSupported(userAVXLevel))
         {
-            return AVXLevel::SCALAR;
-        }
-        else if (userAVXLevel == AVXLevel::AVX512 && is_avx512_supported())
-        {
-            return AVXLevel::AVX512;
-        }
-        else if (userAVXLevel == AVXLevel::AVX2 && is_avx_supported() && is_avx2_supported() && is_sse_supported())
-        {
-            return AVXLevel::AVX2;
+            return userAVXLevel;
         }
         else
         {
@@ -118,6 +196,11 @@ private:
 
     int getMaxMemoryAvailable(int maxMemoryInMB)
     {
+        if (maxMemoryInMB <= 0)
+        {
+            throw JavaException("java/lang/IllegalArgumentException", "Max memory should be greater than 0.");
+        }
+
         struct sysinfo info;
         if (sysinfo(&info) != 0)
         {
@@ -195,7 +278,7 @@ int32_t allocateDPTable(int hapLength, int readLength)
     return dpTable.allocate(dp_table_size, transition_size, prior_size);
 }
 
-bool initializeNative(int numThreads = 1, AVXLevel userAVXLevel = AVXLevel::AVX512, int maxMemoryInMB = 512)
+bool initializeNative(OpenMPSetting openMPSetting = OpenMPSetting::FASTEST_AVAILABLE, int numThreads = 1, AVXLevel userAVXLevel = AVXLevel::AVX512, int maxMemoryInMB = 512)
 {
     /* Initialize Probability Cache */
     ProbabilityCache &probCache = ProbabilityCache::getInstance();
@@ -206,7 +289,7 @@ bool initializeNative(int numThreads = 1, AVXLevel userAVXLevel = AVXLevel::AVX5
     }
     /* Initialize Configuration */
     ComputeConfig &config = ComputeConfig::getInstance();
-    config.initialize(numThreads, userAVXLevel, maxMemoryInMB);
+    config.initialize(openMPSetting, numThreads, userAVXLevel, maxMemoryInMB);
 
     /* Initialize DP Table based on Configuration */
     int maxHapLength = 500;  // todo: Get maxReadLength from JavaData

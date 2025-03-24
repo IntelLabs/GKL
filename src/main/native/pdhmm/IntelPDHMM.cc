@@ -41,11 +41,11 @@
 // int time_for_batch = 0;
 // int time_for_compute = 0;
 
-JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint max_threads, jint avxLevel, jint maxMemoryInMB)
+JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint openMPSetting, jint max_threads, jint avxLevel, jint maxMemoryInMB)
 {
-    initializeNative((int)max_threads, (AVXLevel)avxLevel, (int)maxMemoryInMB);
     try
     {
+        initializeNative((OpenMPSetting)openMPSetting, (int)max_threads, (AVXLevel)avxLevel, (int)maxMemoryInMB);
         JavaData::InitializeFieldIDs(env, readDataHolder, haplotypeDataHolder);
     }
     catch (JavaException &e)
@@ -62,74 +62,80 @@ JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *en
 
 JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computeLikelihoodsNative(JNIEnv *env, jobject obj, jobjectArray readDataArray, jobjectArray haplotypeDataArray, jdoubleArray likelihoodArray)
 {
-    // Step 0: Initialize JavaData with current data information
-    ComputeConfig &config = ComputeConfig::getInstance();
-    JavaData javaData(env, readDataArray, haplotypeDataArray, config.getMaxMemoryInMB());
-
-    // Allocate DP Table based on max haplotype length
-    allocateDPTable(javaData.getMaxHaplotypeLength(), javaData.getMaxReadLength());
-
-    // Get the total number of batches
-    int totalBatch = javaData.getTotalBatch();
-
-    // Get the pointer to the likelihood array
-    jdouble *likelihoods = env->GetDoubleArrayElements(likelihoodArray, NULL);
-    if (likelihoods == NULL)
+    try
     {
-        env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
-        return;
-    }
+        // Step 0: Initialize JavaData with current data information
+        ComputeConfig &config = ComputeConfig::getInstance();
+        JavaData javaData(env, readDataArray, haplotypeDataArray, config.getMaxMemoryInMB());
 
-    // Process each batch
-    for (int i = 0; i < totalBatch; i++)
-    {
-        // auto start_time = std::chrono::high_resolution_clock::now();
+        // Allocate DP Table based on max haplotype length
+        allocateDPTable(javaData.getMaxHaplotypeLength(), javaData.getMaxReadLength());
 
-        // Get the next batch of data
-        PDHMMInputData currBatch = javaData.getNextBatch();
+        // Get the total number of batches
+        int totalBatch = javaData.getTotalBatch();
 
-        // auto end_time = std::chrono::high_resolution_clock::now();
-        // time_for_batch += static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
-
-        // Compute PDHMM for the current batch
-        // start_time = std::chrono::high_resolution_clock::now();
-
-        int32_t status = computePDHMM(currBatch);
-        // end_time = std::chrono::high_resolution_clock::now();
-        // time_for_compute += static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
-
-        if (status != PDHMM_SUCCESS)
+        // Get the pointer to the likelihood array
+        jdouble *likelihoods = env->GetDoubleArrayElements(likelihoodArray, NULL);
+        if (likelihoods == NULL)
         {
-            // Release the likelihood array and throw an appropriate exception
-            env->ReleaseDoubleArrayElements(likelihoodArray, likelihoods, 0);
-            if (status == PDHMM_MEMORY_ALLOCATION_FAILED)
-            {
-                env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
-            }
-            else if (status == PDHMM_INPUT_DATA_ERROR)
-            {
-                env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "Error while calculating PDHMM. Input arrays aren't valid.");
-            }
-            else if (status == PDHMM_FAILURE)
-            {
-                env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failure while computing PDHMM.");
-            }
-            else if (status == PDHMM_MEMORY_ACCESS_ERROR)
-            {
-                env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Out of bound memory access while computing PDHMM.");
-            }
+            env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
             return;
         }
 
-        // Copy the results from the current batch to the likelihood array
-        for (int j = 0; j < currBatch.getT(); j++)
+        // Process each batch
+        for (int i = 0; i < totalBatch; i++)
         {
-            likelihoods[i * javaData.getBatchSize() + j] = currBatch.getResult()[j];
-        }
-    }
+            // Get the next batch of data
+            PDHMMInputData currBatch = javaData.getNextBatch();
 
-    // Release the likelihood array
-    env->ReleaseDoubleArrayElements(likelihoodArray, likelihoods, 0);
+
+            // Compute PDHMM for the current batch
+
+            int32_t status = computePDHMM(currBatch);
+
+            if (status != PDHMM_SUCCESS)
+            {
+                // Release the likelihood array and throw an appropriate exception
+                env->ReleaseDoubleArrayElements(likelihoodArray, likelihoods, 0);
+                if (status == PDHMM_MEMORY_ALLOCATION_FAILED)
+                {
+                    env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Memory allocation issue.");
+                }
+                else if (status == PDHMM_INPUT_DATA_ERROR)
+                {
+                    env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "Error while calculating PDHMM. Input arrays aren't valid.");
+                }
+                else if (status == PDHMM_FAILURE)
+                {
+                    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Failure while computing PDHMM.");
+                }
+                else if (status == PDHMM_MEMORY_ACCESS_ERROR)
+                {
+                    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Out of bound memory access while computing PDHMM.");
+                }
+                return;
+            }
+
+            // Copy the results from the current batch to the likelihood array
+            for (int j = 0; j < currBatch.getT(); j++)
+            {
+                likelihoods[i * javaData.getBatchSize() + j] = currBatch.getResult()[j];
+            }
+        }
+
+        // Release the likelihood array
+        env->ReleaseDoubleArrayElements(likelihoodArray, likelihoods, 0);
+    }
+    catch (JavaException &e)
+    {
+        jclass exceptionClass = env->FindClass(e.classPath);
+        if (!exceptionClass)
+        {
+            env->FatalError("Unable to find Java exception class");
+            return;
+        }
+        env->ThrowNew(exceptionClass, e.message);
+    }
 }
 
 /*
@@ -242,6 +248,4 @@ JNIEXPORT jdoubleArray JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computePDHMMN
 JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_doneNative(JNIEnv *env, jclass obj)
 {
     doneNative();
-    // INFO("Total time for creating batch: %d ms", time_for_batch);
-    // INFO("Total time for computing pdhmm: %d ms", time_for_compute);
 }
