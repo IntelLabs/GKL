@@ -16,15 +16,12 @@ repositories {
     mavenLocal()
     mavenCentral()
     maven { url "https://artifactory.broadinstitute.org/artifactory/libs-snapshot/" }
-    flatDir {
-        dirs 'libs'
-    }
 }
 
 dependencies {
     implementation 'commons-io:commons-io:2.7'
     implementation 'commons-logging:commons-logging:1.2'
-    api name: 'gatk-native-bindings_2025_03_20', ext: 'jar'
+    api 'org.broadinstitute:gatk-native-bindings:1.0.1'
     api 'com.github.samtools:htsjdk:3.0.5'
     testImplementation 'org.testng:testng:7.5.1'
     testImplementation 'org.apache.commons:commons-lang3:3.13.0'
@@ -122,10 +119,6 @@ test {
     outputs.upToDateWhen { false }
 }
 
-task runTestsWithTaskset_Mem(type: Exec) {
-    def coreNumber = project.hasProperty('coreNumber') ? project.coreNumber : '0-3'
-    commandLine 'taskset', '-c', coreNumber, '/usr/bin/time', '-v', './gradlew', 'test', '--info', '--tests', 'com.intel.gkl.pdhmm.IntelPDHMMUnitTest.newPDHMMTest'
-}
 //===================================================================
 // release
 //===================================================================

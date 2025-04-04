@@ -1247,8 +1247,6 @@ int32_t CONCAT(computePDHMM_, SIMD_ENGINE)(const int8_t *hap_bases, const int8_t
 #endif
         for (int32_t i = 0; i < roundedBatchSize; i += SIMD_WIDTH_DOUBLE)
         {
-            memset(transitionVec, 0, TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * sizeof(double));
-            memset(priorVec, 0, paddedMaxHaplotypeLength * paddedMaxReadLength * SIMD_WIDTH_DOUBLE * sizeof(double));
             CONCAT(initializeVec_, SIMD_ENGINE)(matchMatrixVec, insertionMatrixVec, deletionMatrixVec, branchMatchMatrixVec, branchInsertionMatrixVec, branchDeletionMatrixVec, *constantsAreInitialized, *initialized, maxHaplotypeLength); // array allocation
             for (int32_t j = 0; j < SIMD_WIDTH_DOUBLE; j++)
             {

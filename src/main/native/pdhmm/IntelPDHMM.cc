@@ -38,9 +38,6 @@
 #include "pdhmm-implementation.h"
 #include <chrono>
 
-// int time_for_batch = 0;
-// int time_for_compute = 0;
-
 JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_initNative(JNIEnv *env, jclass obj, jclass readDataHolder, jclass haplotypeDataHolder, jint openMPSetting, jint max_threads, jint avxLevel, jint maxMemoryInMB)
 {
     try
@@ -87,7 +84,6 @@ JNIEXPORT void JNICALL Java_com_intel_gkl_pdhmm_IntelPDHMM_computeLikelihoodsNat
         {
             // Get the next batch of data
             PDHMMInputData currBatch = javaData.getNextBatch();
-
 
             // Compute PDHMM for the current batch
 
