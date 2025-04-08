@@ -25,7 +25,9 @@
 #include <debug.h>
 #include "pdhmm-serial.h"
 #include "avx2_impl.h"
+#if defined(__linux__)
 #include <omp.h>
+#endif
 #include "JavaData.h"
 #ifndef __APPLE__
 #include "avx512_impl.h"

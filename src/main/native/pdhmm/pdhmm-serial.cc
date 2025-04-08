@@ -24,7 +24,7 @@
 #include "pdhmm-serial.h"
 #include "MathUtils.h"
 #include <cstdio>
-#ifdef _OPENMP
+#if defined(__linux__)
 #include <omp.h>
 #endif
 

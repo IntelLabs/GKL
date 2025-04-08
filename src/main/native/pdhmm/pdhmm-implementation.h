@@ -31,10 +31,16 @@
 #include "avx512_impl.h"
 #endif
 
-#ifdef linux
+#if defined(__linux__)
 #include <omp.h>
 #endif
+
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+#elif defined(__linux__)
 #include <sys/sysinfo.h>
+#endif
 
 enum class AVXLevel
 {
@@ -65,20 +71,20 @@ public:
     void initialize(OpenMPSetting openMPSetting = OpenMPSetting::FASTEST_AVAILABLE, int numThreads = 1, AVXLevel userAVXLevel = AVXLevel::AVX512, int maxMemoryInMB = 512)
     {
         // Check OpenMP setting
-        switch (openMPSetting)
+        switch (static_cast<int>(openMPSetting))
         {
-        case OpenMPSetting::FASTEST_AVAILABLE:
+        case static_cast<int>(OpenMPSetting::FASTEST_AVAILABLE):
             this->openMP = numThreads > 1 && isOpenMPAvailable();
 
             break;
-        case OpenMPSetting::ENABLE:
+        case static_cast<int>(OpenMPSetting::ENABLE):
             if (!isOpenMPAvailable())
             {
                 throw JavaException("java/lang/IllegalStateException", "OpenMP is enabled but not available on this system. Please disable OpenMP or run on a system that supports OpenMP.");
             }
             this->openMP = true;
             break;
-        case OpenMPSetting::DISABLE:
+        case static_cast<int>(OpenMPSetting::DISABLE):
         default:
             this->openMP = false;
             numThreads = 1;
@@ -86,14 +92,14 @@ public:
         }
 
         // Check AVX level setting
-        switch (userAVXLevel)
+        switch (static_cast<int>(userAVXLevel))
         {
-        case AVXLevel::FASTEST_AVAILABLE:
+        case static_cast<int>(AVXLevel::FASTEST_AVAILABLE):
             this->avxLevel = getBestAvailableAVXLevel(userAVXLevel);
             break;
-        case AVXLevel::AVX512:
-        case AVXLevel::AVX2:
-        case AVXLevel::SCALAR:
+        case static_cast<int>(AVXLevel::AVX512):
+        case static_cast<int>(AVXLevel::AVX2):
+        case static_cast<int>(AVXLevel::SCALAR):
             if (!isArchSupported(userAVXLevel))
             {
                 throw JavaException("java/lang/IllegalStateException", "Requested AVX level is not available on this system.");
@@ -130,13 +136,13 @@ private:
     // Check if the specified AVX level is supported
     bool isArchSupported(AVXLevel avxLevel)
     {
-        switch (avxLevel)
+        switch (static_cast<int>(avxLevel))
         {
-        case AVXLevel::AVX512:
+        case static_cast<int>(AVXLevel::AVX512):
             return is_avx512_supported();
-        case AVXLevel::AVX2:
+        case static_cast<int>(AVXLevel::AVX2):
             return is_avx_supported() && is_avx2_supported() && is_sse_supported();
-        case AVXLevel::SCALAR:
+        case static_cast<int>(AVXLevel::SCALAR):
             return true;
         default:
             return false;
@@ -194,6 +200,7 @@ private:
 #endif
     }
 
+    // Get the maximum memory available on the system
     int getMaxMemoryAvailable(int maxMemoryInMB)
     {
         if (maxMemoryInMB <= 0)
@@ -201,31 +208,45 @@ private:
             throw JavaException("java/lang/IllegalArgumentException", "Max memory should be greater than 0.");
         }
 
-        struct sysinfo info;
-        if (sysinfo(&info) != 0)
-        {
-            // If sysinfo fails, return the provided maxMemoryInMB
-            return maxMemoryInMB;
-        }
-        // Convert available memory from bytes to megabytes
-        int systemMaxMemoryInMB = static_cast<int>(info.freeram / (1024 * 1024));
+        int systemMaxMemoryInMB = maxMemoryInMB;
+#if defined(__APPLE__)
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        vm_statistics64_data_t vmstat;
+        mach_port_t host = mach_host_self();
 
-        // Return the minimum of the provided maxMemoryInMB and the system's available memory
+        if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vmstat,&count) == KERN_SUCCESS)
+        {
+            int pageSize;
+            size_t size = sizeof(pageSize);
+            sysctlbyname("hw.pagesize", &pageSize, &size, nullptr, 0);
+
+            int64_t freeMemBytes = static_cast<int64_t>(vmstat.free_count + vmstat.inactive_count) * pageSize;
+            systemMaxMemoryInMB = static_cast<int>(freeMemBytes / (1024 * 1024));
+        }
+#elif defined(__linux__)
+        struct sysinfo info;
+        if (sysinfo(&info) == 0)
+        {
+            systemMaxMemoryInMB = static_cast<int>(info.freeram / (1024 * 1024));
+        }
+#endif
+
         return std::min(maxMemoryInMB, systemMaxMemoryInMB);
     }
 
+    // Print the configuration settings
     void printConfig()
     {
         const char *avxLevelStr;
-        switch (avxLevel)
+        switch (static_cast<int>(avxLevel))
         {
-        case AVXLevel::SCALAR:
+        case static_cast<int>(AVXLevel::SCALAR):
             avxLevelStr = "SCALAR";
             break;
-        case AVXLevel::AVX2:
+        case static_cast<int>(AVXLevel::AVX2):
             avxLevelStr = "AVX2";
             break;
-        case AVXLevel::AVX512:
+        case static_cast<int>(AVXLevel::AVX512):
             avxLevelStr = "AVX512";
             break;
         default:
@@ -252,13 +273,17 @@ int getSimdWidth()
     ComputeConfig &config = ComputeConfig::getInstance();
     AVXLevel avxLevel = config.getAVXLevel();
 
-    switch (avxLevel)
+    switch (static_cast<int>(avxLevel))
     {
-    case AVXLevel::AVX512:
+    case static_cast<int>(AVXLevel::AVX512):
+#ifndef __APPLE__
         return simd_width_avx512;
-    case AVXLevel::AVX2:
+#else
+        return 0;
+#endif
+    case static_cast<int>(AVXLevel::AVX2):
         return simd_width_avx2;
-    case AVXLevel::SCALAR:
+    case static_cast<int>(AVXLevel::SCALAR):
     default:
         return 1; // Scalar width
     }
@@ -312,19 +337,22 @@ int32_t computePDHMM(PDHMMInputData input)
 
     int status = PDHMM_SUCCESS;
 
-    switch (avxLevel)
+    switch (static_cast<int>(avxLevel))
     {
-    case AVXLevel::AVX512:
+    case static_cast<int>(AVXLevel::AVX512):
         // Call AVX512 implementation
+        status = PDHMM_FAILURE;
+#ifndef __APPLE__
         status = avx512_impl(input, numThreads);
+#endif
         break;
 
-    case AVXLevel::AVX2:
+    case static_cast<int>(AVXLevel::AVX2):
         // Call AVX2 implementation
         status = avx2_impl(input, numThreads);
         break;
 
-    case AVXLevel::SCALAR:
+    case static_cast<int>(AVXLevel::SCALAR):
     default:
         // Call scalar implementation
         status = scalar_impl(input, numThreads);
@@ -342,19 +370,22 @@ int32_t computePDHMM(const int8_t *hap_bases, const int8_t *hap_pdbases, const i
 
     int status = PDHMM_SUCCESS;
 
-    switch (avxLevel)
+    switch (static_cast<int>(avxLevel))
     {
-    case AVXLevel::AVX512:
+    case static_cast<int>(AVXLevel::AVX512):
         // Call AVX512 implementation
+        status = PDHMM_FAILURE;
+#ifndef __APPLE__
         status = computePDHMM_fp_avx512(hap_bases, hap_pdbases, read_bases, read_qual, read_ins_qual, read_del_qual, gcp, result, t, hap_lengths, read_lengths, maxReadLength, maxHaplotypeLength, numThreads);
+#endif
         break;
 
-    case AVXLevel::AVX2:
+    case static_cast<int>(AVXLevel::AVX2):
         // Call AVX2 implementation
         status = computePDHMM_fp_avx2(hap_bases, hap_pdbases, read_bases, read_qual, read_ins_qual, read_del_qual, gcp, result, t, hap_lengths, read_lengths, maxReadLength, maxHaplotypeLength, numThreads);
         break;
 
-    case AVXLevel::SCALAR:
+    case static_cast<int>(AVXLevel::SCALAR):
     default:
         // Call scalar implementation
         status = computePDHMM_serial(hap_bases, hap_pdbases, read_bases, read_qual, read_ins_qual, read_del_qual, gcp, result, t, hap_lengths, read_lengths, maxReadLength, maxHaplotypeLength, numThreads);
