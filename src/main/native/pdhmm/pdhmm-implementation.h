@@ -295,9 +295,9 @@ int32_t allocateDPTable(int hapLength, int readLength)
     int simdWidth = getSimdWidth();
     int numThreads = config.getNumThreads();
 
-    size_t dp_table_size = (hapLength + 1) * simdWidth * numThreads * sizeof(double);
-    size_t transition_size = TRANS_PROB_ARRAY_LENGTH * (readLength + 1) * simdWidth * numThreads * sizeof(double);
-    size_t prior_size = (hapLength + 1) * (readLength + 1) * simdWidth * numThreads * sizeof(double);
+    size_t dp_table_size = (size_t)(hapLength + 1) * (size_t)(readLength + 1) * (size_t)simdWidth * (size_t)numThreads * sizeof(double);
+    size_t transition_size = TRANS_PROB_ARRAY_LENGTH * (size_t)(readLength + 1) * (size_t)simdWidth * (size_t)numThreads * sizeof(double);
+    size_t prior_size = (size_t)(hapLength + 1) * (size_t)(readLength + 1) * (size_t)simdWidth * (size_t)numThreads * sizeof(double);
 
     DPTable &dpTable = DPTable::getInstance();
     return dpTable.allocate(dp_table_size, transition_size, prior_size);

@@ -42,7 +42,7 @@ inline int32_t allocate(double *&matchMatrixVec, double *&insertionMatrixVec, do
 {
     const int32_t paddedMaxReadLength = maxReadLength + 1;
     const int32_t paddedMaxHaplotypeLength = maxHaplotypeLength + 1;
-    int32_t sizeOfTables = static_cast<int32_t>(paddedMaxHaplotypeLength * sizeof(double));
+    size_t sizeOfTables = (size_t) paddedMaxHaplotypeLength * sizeof(double);
 
     matchMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
     insertionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
@@ -51,9 +51,9 @@ inline int32_t allocate(double *&matchMatrixVec, double *&insertionMatrixVec, do
     branchInsertionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
     branchDeletionMatrixVec = (double *)_mm_malloc(sizeOfTables, ALIGN_SIZE);
 
-    priorVec = (double *)_mm_malloc(paddedMaxHaplotypeLength * paddedMaxReadLength * sizeof(double), ALIGN_SIZE);
+    priorVec = (double *)_mm_malloc((size_t)paddedMaxHaplotypeLength * (size_t)paddedMaxReadLength * sizeof(double), ALIGN_SIZE);
 
-    transitionVec = (double *)_mm_malloc(TRANS_PROB_ARRAY_LENGTH * paddedMaxReadLength * sizeof(double), ALIGN_SIZE);
+    transitionVec = (double *)_mm_malloc((size_t)TRANS_PROB_ARRAY_LENGTH * (size_t)paddedMaxReadLength * sizeof(double), ALIGN_SIZE);
 
     if (matchMatrixVec == NULL || insertionMatrixVec == NULL || deletionMatrixVec == NULL || branchMatchMatrixVec == NULL || branchInsertionMatrixVec == NULL || branchDeletionMatrixVec == NULL || priorVec == NULL || transitionVec == NULL)
     {
@@ -481,10 +481,10 @@ int32_t computePDHMM_serial(const int8_t *hap_bases, const int8_t *hap_pdbases, 
     int32_t *g_prev_hap_bases_lengths;
     int32_t *status;
 
-    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
-    status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    g_constantsAreInitialized = (bool *)_mm_malloc((size_t)totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc((size_t)totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc((size_t)totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    status = (int32_t *)_mm_malloc((size_t)totalThreads * sizeof(int32_t), ALIGN_SIZE);
 
     if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
     {
@@ -562,10 +562,10 @@ int32_t computePDHMM_serial(const double *matchToMatchProb, const double *qualTo
     int32_t *g_prev_hap_bases_lengths;
     int32_t *status;
 
-    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
-    status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    g_constantsAreInitialized = (bool *)_mm_malloc((size_t)totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc((size_t)totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc((size_t)totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    status = (int32_t *)_mm_malloc((size_t)totalThreads * sizeof(int32_t), ALIGN_SIZE);
 
     if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
     {
@@ -680,10 +680,10 @@ int32_t scalar_impl(PDHMMInputData input, int totalThreads)
     int32_t *g_prev_hap_bases_lengths;
     int32_t *status;
 
-    g_constantsAreInitialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    g_initialized = (bool *)_mm_malloc(totalThreads * sizeof(bool), ALIGN_SIZE);
-    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
-    status = (int32_t *)_mm_malloc(totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    g_constantsAreInitialized = (bool *)_mm_malloc((size_t)totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_initialized = (bool *)_mm_malloc((size_t)totalThreads * sizeof(bool), ALIGN_SIZE);
+    g_prev_hap_bases_lengths = (int32_t *)_mm_malloc((size_t)totalThreads * sizeof(int32_t), ALIGN_SIZE);
+    status = (int32_t *)_mm_malloc((size_t)totalThreads * sizeof(int32_t), ALIGN_SIZE);
 
     if (g_constantsAreInitialized == NULL || g_initialized == NULL || g_prev_hap_bases_lengths == NULL || status == NULL)
     {

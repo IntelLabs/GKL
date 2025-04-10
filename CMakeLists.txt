@@ -6,6 +6,10 @@ find_package(Java 1.8 REQUIRED)
 find_package(JNI)
 include_directories(${JNI_INCLUDE_DIRS})
 
+# Require C++11
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # common compiler and linker settings
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_FORTIFY_SOURCE=2 ")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 ")
